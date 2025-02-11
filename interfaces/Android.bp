@@ -4,17 +4,16 @@ hidl_package_root {
 }
 
 aidl_interface {
-    name: "vendor.oplus.hardware.appradioaidl",
-    system_ext_specific: true,
+    name: "vendor.lineage.oplus_als",
     vendor_available: true,
     local_include_dir: "aidl",
-    srcs: ["aidl/vendor/oplus/hardware/appradioaidl/*.aidl"],
+    srcs: ["aidl/vendor/lineage/oplus_als/*.aidl"],
     stability: "vintf",
-    owner: "oplus",
+    owner: "lineage",
 
     backend: {
         cpp: {
-            enabled: true,
+            enabled: false,
         },
         java: {
             enabled: false,
