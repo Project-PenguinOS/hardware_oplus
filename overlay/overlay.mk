@@ -7,8 +7,7 @@
 PRODUCT_PACKAGES += \
     FrameworksResCommon \
     OPlusWifiResCommon \
-    SystemUIResCommon \
-    TelephonyResCommon \
+    SettingsProviderResCommon \
     WifiResCommon
 
 PRODUCT_SOONG_NAMESPACES += \
