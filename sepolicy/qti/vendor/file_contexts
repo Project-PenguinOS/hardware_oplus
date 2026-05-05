@@ -20,7 +20,6 @@
 # Charging
 /dev/oplus_chg                                                               u:object_r:oplus_charger_device:s0
 /(odm|vendor/odm)/bin/hw/vendor\.oplus\.hardware\.charger-V[0-9]+-service    u:object_r:hal_oplus_charger_aidl_exec:s0
-/vendor/bin/hw/vendor\.lineage\.powershare-service\.oplus                    u:object_r:hal_lineage_powershare_default_exec:s0
 /sys/devices/platform/soc/soc:oplus,chg_intf/oplus_chg/usb/fastchg_status         u:object_r:vendor_sysfs_battery_supply:s0
 /sys/devices/platform/soc/soc:oplus,chg_intf/soc:oplus,chg_intf:oplus,wireless-charge/oplus_chg/wireless/fastchg_status u:object_r:vendor_sysfs_battery_supply:s0
 
@@ -34,7 +33,6 @@
 /(odm|vendor/odm)/bin/hw/vendor\.oplus\.hardware\.cryptoeng@1\.0-service           u:object_r:hal_cryptoeng_default_exec:s0
 
 # Display
-/vendor/bin/hw/vendor\.lineage\.livedisplay-service\.oplus          u:object_r:hal_lineage_livedisplay_qti_exec:s0
 /odm/bin/hw/vendor\.oplus\.hardware\.displaypanelfeature-service    u:object_r:hal_oplus_displaypanelfeature_aidl_exec:s0
 /dev/oplus_display                                                  u:object_r:graphics_device:s0
 
@@ -208,7 +206,6 @@
 /(odm|vendor/odm)/bin/hw/vendor-oplus-hardware-touch-V1-service            u:object_r:hal_oplus_touch_aidl_exec:s0
 /(odm|vendor/odm)/bin/hw/vendor-oplus-hardware-touch-V2(-hbp5)?-service    u:object_r:hal_oplus_touch_aidl_exec:s0
 /(odm|vendor/odm)/bin/touchDaemon                                          u:object_r:oplus_touchdaemon_exec:s0
-/vendor/bin/hw/vendor\.lineage\.touch-service\.oplus                       u:object_r:hal_lineage_touch_default_exec:s0
 /data/vendor/touch(/.*)?                                                   u:object_r:vendor_persist_oplus_touch_file:s0
 /data/vendor/touchconfig(/.*)?                                             u:object_r:vendor_persist_oplus_touch_file:s0
 /dev/hbp_core(/.*)?                                                        u:object_r:oplus_touchdaemon_device:s0
