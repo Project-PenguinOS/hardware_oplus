@@ -60,7 +60,7 @@ public class ViewRootManager {
     }
 
     /** Stub - OplusBlurParam not available on AOSP/LineageOS */
-    public void setBlurParams(Object params) {
+    public void setBlurParams(com.oplus.graphics.OplusBlurParam params) {
         // no-op
     }
 }
