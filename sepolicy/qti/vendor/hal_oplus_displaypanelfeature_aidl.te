@@ -5,6 +5,13 @@ vndbinder_use(hal_oplus_displaypanelfeature_aidl)
 type hal_oplus_displaypanelfeature_aidl_exec, exec_type, vendor_file_type, file_type;
 init_daemon_domain(hal_oplus_displaypanelfeature_aidl)
 
+binder_call(vendor_hal_oplus_displaypanelfeature_client, vendor_hal_oplus_displaypanelfeature_server)
+binder_call(vendor_hal_oplus_displaypanelfeature_server, vendor_hal_oplus_displaypanelfeature_client)
+
+# system_server clients: fusion light bri, LiveDisplay/PA, etc.
+# Use hal_client_domain (not a raw service_manager find) — required by
+# hal_attribute_service neverallow below.
+hal_client_domain(system_server, vendor_hal_oplus_displaypanelfeature)
 hal_server_domain(hal_oplus_displaypanelfeature_aidl, vendor_hal_oplus_displaypanelfeature)
 
 binder_call(vendor_hal_oplus_displaypanelfeature_client, vendor_hal_oplus_displaypanelfeature_server)
