@@ -24,6 +24,14 @@
         </interface>
     </hal>
     <hal format="aidl" optional="true">
+        <name>vendor.aac.hardware.richtap.vibrator</name>
+        <version>2</version>
+        <interface>
+            <name>IRichtapVibrator</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+    <hal format="aidl" optional="true">
         <name>vendor.oplus.hardware.appradioaidl</name>
         <version>1</version>
         <interface>
@@ -213,6 +221,14 @@
         </interface>
     </hal>
     <hal format="aidl" optional="true">
+        <name>vendor.oplus.hardware.oplusvibrator</name>
+        <version>2</version>
+        <interface>
+            <name>IOplusVibrator</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+    <hal format="aidl" optional="true">
         <name>vendor.oplus.hardware.osense.client</name>
         <version>1</version>
         <interface>
@@ -357,6 +373,14 @@
         <version>1</version>
         <interface>
             <name>IUrcc</name>
+            <instance>default</instance>
+        </interface>
+    </hal>
+    <hal format="aidl" optional="true">
+        <name>vendor.oplus.hardware.vibrator</name>
+        <version>1</version>
+        <interface>
+            <name>ILinearMotorVibrator</name>
             <instance>default</instance>
         </interface>
     </hal>
