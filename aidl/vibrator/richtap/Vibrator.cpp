@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <log/log.h>
 
+#include <optional>
 #include <thread>
 
 #include "aac_vibra_function.h"
@@ -71,6 +72,28 @@ ndk::ScopedAStatus Vibrator::on(int32_t timeoutMs,
     return ndk::ScopedAStatus::ok();
 }
 
+// libaacvibrator expects RichTap's internal prebaked effect IDs, not the AOSP
+// Effect constants. Passing raw AOSP IDs makes the lib fall back to a generic
+// waveform (loud/wrong). Map them the way the RichTap framework does.
+static std::optional<uint32_t> mapEffectToPrebakedId(Effect effect) {
+    switch (effect) {
+        case Effect::CLICK:
+            return 0x3008;
+        case Effect::DOUBLE_CLICK:
+            return 0x1001;
+        case Effect::TICK:
+            return 0x3003;
+        case Effect::THUD:
+            return 0x3003;
+        case Effect::POP:
+            return 0x3003;
+        case Effect::HEAVY_CLICK:
+            return 0x3007;
+        default:
+            return static_cast<uint32_t>(effect) + 0x1000;
+    }
+}
+
 ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength es,
                                      const std::shared_ptr<IVibratorCallback>& callback,
                                      int32_t* _aidl_return) {
@@ -93,7 +116,14 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength es,
             return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
     }
 
-    int32_t ret = aac_vibra_looper_prebaked_effect(static_cast<uint32_t>(effect), strength);
+    auto mappedEffect = mapEffectToPrebakedId(effect);
+    if (!mappedEffect.has_value())
+        return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+
+    ALOGD("perform: effect %d -> prebaked 0x%x, strength %d", static_cast<int>(effect),
+          mappedEffect.value(), strength);
+
+    int32_t ret = aac_vibra_looper_prebaked_effect(mappedEffect.value(), strength);
     if (ret < 0) {
         ALOGE("AAC perform failed: %d\n", ret);
         return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_SERVICE_SPECIFIC));
