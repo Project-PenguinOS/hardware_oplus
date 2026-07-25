@@ -8,3 +8,11 @@ rw_dir_file(system_server, vendor_sysfs_usb_supply)
 rw_dir_file(system_server, vendor_proc_oplus_scheduler)
 rw_dir_file(system_server, vendor_sysfs_usb_supply)
 
+# system_server probes the HIDL variant of some vendor interfaces (e.g.
+# vendor.oplus.hardware.displaypanelfeature) before falling back to the working
+# AIDL service. Those HIDL interfaces are not registered and not labelled, so
+# the hwservicemanager lookup lands on default_android_hwservice and is denied.
+# Harmless -- the AIDL service serves the feature -- but newly noisy now that
+# hwservicemanager answers lookups. Suppress the cosmetic get-then-fallback probe.
+dontaudit system_server default_android_hwservice:hwservice_manager find;
+
