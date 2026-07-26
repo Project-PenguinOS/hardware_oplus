@@ -101,3 +101,4 @@ ro.product.marketname            u:object_r:exported_system_prop:s0
 # WCNSS
 ro.vendor.vold.serialno                               u:object_r:vendor_vold_prop:s0
 vendor.vold.serialno                                  u:object_r:vendor_vold_prop:s0
+persist.sys.haptic_profile      u:object_r:exported_system_prop:s0
