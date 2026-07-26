@@ -25,3 +25,7 @@ rw_dir_file(hal_oplus_sensor_aidl, vendor_proc_eng_cali_file)
 rw_dir_file(hal_oplus_sensor_aidl, vendor_proc_oplus_als_file)
 
 get_prop(hal_oplus_sensor_aidl, vendor_sensors_prop)
+# Fusion content-comp: ISensorFeature writes {ts_start,ts_end,frame_idx} so the
+# SSC/DSP can pair ALS samples with CWB frames. Without this the fused lux
+# freezes while the screen is ON (stock: dodge vendor_sepolicy.cil).
+allow hal_oplus_sensor_aidl ssc_interactive_device:chr_file rw_file_perms;
