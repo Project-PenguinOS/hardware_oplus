@@ -415,6 +415,18 @@ int LedVibratorDevice::off() {
 ndk::ScopedAStatus Vibrator::getCapabilities(int32_t* _aidl_return) {
     *_aidl_return = IVibrator::CAP_ON_CALLBACK;
 
+#ifdef USE_EFFECT_STREAM
+    /* Prefer FF + effect streams when available so haptic profiles work even
+     * if the aw8697 LED sysfs node is also present (salami/sm8550). */
+    if (ff.mSupportEffects) {
+        if (ff.mSupportGain) *_aidl_return |= IVibrator::CAP_AMPLITUDE_CONTROL;
+        *_aidl_return |= IVibrator::CAP_PERFORM_CALLBACK;
+        if (ff.mSupportExternalControl) *_aidl_return |= IVibrator::CAP_EXTERNAL_CONTROL;
+        ALOGD("QTI Vibrator reporting capabilities (effect-stream FF): %d", *_aidl_return);
+        return ndk::ScopedAStatus::ok();
+    }
+#endif
+
     if (ledVib.mDetected) {
         *_aidl_return |= IVibrator::CAP_PERFORM_CALLBACK;
         ALOGD("QTI Vibrator reporting capabilities: %d", *_aidl_return);
@@ -476,6 +488,22 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength es,
 
     ALOGD("Vibrator perform effect %d", effect);
 
+#ifdef USE_EFFECT_STREAM
+    /* Prefer FF + get_effect_stream() when available. LED waveform_index path
+     * ignores haptic profiles (persist.sys.haptic_profile). Pass AOSP Effect
+     * IDs 0-5 straight through — do not remap to ColorOS bin IDs. */
+    if (ff.mSupportEffects) {
+        if (effect < Effect::CLICK || effect > Effect::HEAVY_CLICK)
+            return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+
+        if (es != EffectStrength::LIGHT && es != EffectStrength::MEDIUM &&
+            es != EffectStrength::STRONG)
+            return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
+
+        ret = ff.playEffect(static_cast<int>(effect), es, &playLengthMs);
+        if (ret != 0) return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_SERVICE_SPECIFIC));
+    } else
+#endif
     if (ledVib.mDetected) {
         switch (effect) {
             case Effect::CLICK:
@@ -551,6 +579,13 @@ ndk::ScopedAStatus Vibrator::perform(Effect effect, EffectStrength es,
 }
 
 ndk::ScopedAStatus Vibrator::getSupportedEffects(std::vector<Effect>* _aidl_return) {
+#ifdef USE_EFFECT_STREAM
+    if (ff.mSupportEffects) {
+        *_aidl_return = {Effect::CLICK, Effect::DOUBLE_CLICK, Effect::TICK,
+                         Effect::THUD,  Effect::POP,          Effect::HEAVY_CLICK};
+        return ndk::ScopedAStatus::ok();
+    }
+#endif
     if (ledVib.mDetected) {
         *_aidl_return = {Effect::CLICK, Effect::DOUBLE_CLICK, Effect::TICK, Effect::HEAVY_CLICK,
                          Effect::TEXTURE_TICK};
@@ -565,6 +600,9 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
     uint8_t tmp;
     int ret;
 
+#ifdef USE_EFFECT_STREAM
+    if (!ff.mSupportEffects)
+#endif
     if (ledVib.mDetected)
         return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
 
@@ -584,6 +622,9 @@ ndk::ScopedAStatus Vibrator::setAmplitude(float amplitude) {
 }
 
 ndk::ScopedAStatus Vibrator::setExternalControl(bool enabled) {
+#ifdef USE_EFFECT_STREAM
+    if (!ff.mSupportEffects)
+#endif
     if (ledVib.mDetected)
         return ndk::ScopedAStatus(AStatus_fromExceptionCode(EX_UNSUPPORTED_OPERATION));
 
