@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     SPDX-FileCopyrightText: 2026 The AlphaDroid Project
+     SPDX-License-Identifier: Apache-2.0
+
+     Declares the ColorOS/OxygenOS vendor permissions that stock ships inside
+     system_ext/framework/oplus-framework-res.apk (package "oplus"), which is
+     not present on AOSP-based builds.
+
+     Ported oplus apps (Gallery, AIUnit, Camera, ...) both request these and
+     protect their own exported components with them. Without a declaring
+     package the permissions do not exist, so every request silently resolves
+     to "not granted" and every guarded component rejects all callers: e.g.
+     Gallery binding AIUnitDownloadService fails with a Permission Denial.
+
+     Protection levels are copied verbatim from stock. The signature-level
+     permissions are granted to the ported apps because this package and they
+     are all signed with the platform certificate.
+
+     android.permission.* entries that stock also redeclares here are
+     deliberately omitted: AOSP already owns them.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.alphadroid.oplus.permissions">
+
+    <permission
+        android:name="com.oplus.permission.ACCESS_DEVICE_LIGHTS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.OPLUS_FEATURE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.ai.AI_PATH_READ_WRITE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.devicecase.ACCESS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.ACCESSIBILITY"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.ACCOUNTS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.AI_APP"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.APP_MANAGER"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.ASSISTANT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.AUTHENTICATE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.BACKUP"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.BLUETOOTH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.CAMERA"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.CAR_LINK"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.CLIPBOARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.CLOUD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.CONNECTIVITY"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.DCS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.EMAIL"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.ENTERTAINMENT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.FACE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.FINANCIAL"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.FINGERPRINT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.GAME"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.IOT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.KEYGUARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.KEY_EVENT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.LOCATION"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.LOG"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.MEDIA"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.MMS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.NFC"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PASSWORD"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PERSISTENT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PHONE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PICTURE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.POWER"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PRIVATE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PROTECT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.PUSH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.READ_COMMON"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.RUS"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SAFE_MANAGER"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SATELLITE_COMMUNICATION"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SAU"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SDCARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SECURITY"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SENSOR"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SETTINGS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SETTINGS_SEARCH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SHARE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.SMART_HOME"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.UPDATE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.USB"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.VOICE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.WEAR"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.safe.WINDOW"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oplus.permission.wallpaper.WALLPAPER_UPDATE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.ACCESSIBILITY"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.ACCOUNTS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.AI_APP"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.APP_MANAGER"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.ASSISTANT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.AUTHENTICATE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.BACKUP"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.BLUETOOTH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.CAMERA"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.CLIPBOARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.CLOUD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.CONNECTIVITY"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.DCS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.EMAIL"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.ENTERTAINMENT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.FACE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.FINANCIAL"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.FINGERPRINT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.GAME"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.IOT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.KEYGUARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.KEY_EVENT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.LOCATION"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.LOG"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.MEDIA"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.MMS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.NFC"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PASSWORD"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PERSISTENT"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PHONE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PICTURE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PRIVATE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PROTECT"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.PUSH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.READ_COMMON"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.RUS"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SAFE_MANAGER"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SAU"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SDCARD"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SECURITY"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SENSOR"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SETTINGS"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SETTINGS_SEARCH"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SHARE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.SMART_HOME"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.UPDATE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.USB"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.VOICE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.oppo.permission.safe.WEAR"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.sprint.internal.id.permission.LAUNCHERFACADE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="com.tmobile.internal.id.permission.LAUNCHERFACADE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="deviceintegration.permission.BLUETOOTH_TRANSPORT_EVENT"
+        android:protectionLevel="normal" />
+
+    <permission
+        android:name="deviceintegration.permission.MANAGE_CROSS_DEVICE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="diagandroid.app.receiveDetailedApplicationState"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="diagandroid.data.receivePDPContextState"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="diagandroid.phone.receiveDetailedCallState"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="oplus.permission.DATA_RESERVE"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="oplus.permission.OPLUS_COMPONENT_SAFE"
+        android:protectionLevel="signature" />
+
+    <permission
+        android:name="oplus.permission.RECEIVE_INSTALL_BACKGROUND"
+        android:protectionLevel="signature|privileged" />
+
+    <permission
+        android:name="oppo.permission.OPPO_COMPONENT_SAFE"
+        android:protectionLevel="signature" />
+
+    <application
+        android:hasCode="false"
+        android:label="Oplus Permissions" />
+
+</manifest>

@@ -1,0 +1,25 @@
+//
+// SPDX-FileCopyrightText: 2026 The AlphaDroid Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+// Manifest-only package: it declares the oplus vendor permissions and nothing
+// else, so it carries no code and no resources.
+android_app {
+    name: "OplusPermissions",
+
+    manifest: "AndroidManifest.xml",
+    sdk_version: "current",
+
+    // The signature-level permissions declared here are only granted to the
+    // ported oplus apps because they share this certificate.
+    certificate: "platform",
+    system_ext_specific: true,
+
+    optimize: {
+        enabled: false,
+    },
+    dex_preopt: {
+        enabled: false,
+    },
+}
