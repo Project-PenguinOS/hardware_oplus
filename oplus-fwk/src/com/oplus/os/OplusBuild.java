@@ -42,6 +42,20 @@ public class OplusBuild {
     }
 
     public static int getOplusOSVERSION() {
+        // The VERSIONS table below stops at ColorOS 12.2, so the legacy lookup can
+        // never report more than 25 and pins us to OplusOS_12_1 (24). AIUnit gates
+        // every unit on UnitConfig.isWhiteConditionsMatch(), which requires
+        // getOplusOSVERSION() >= the unit's minColorApi; the Gallery AI edit units
+        // all declare 30. Reporting 24 therefore makes every AI tool render in the
+        // editor and then fail with "unit config not found" the moment it is used.
+        //
+        // Prefer the real ColorOS API level published by the ROM
+        // (ro.build.version.oplus.api, set in vendor/oplus/camera/opluscamera.mk)
+        // and keep the table walk only as a fallback for older trees.
+        int api = SystemProperties.getInt("ro.build.version.oplus.api", 0);
+        if (api > 0) {
+            return api;
+        }
         for (int i = VERSIONS.length - 2; i >= 0; i--) {
             if (!TextUtils.isEmpty(VERSION.RELEASE) && VERSION.RELEASE.startsWith(VERSIONS[i])) {
                 return i + 1;
