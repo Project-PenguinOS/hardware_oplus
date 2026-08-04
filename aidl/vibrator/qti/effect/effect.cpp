@@ -54,17 +54,17 @@ const struct effect_stream* get_effect_stream(uint32_t effect_id) {
 #ifdef HAPTIC_PROFILE_SUPPORT
     using android::base::GetProperty;
 
-    std::string profile = GetProperty("persist.sys.haptic_profile", "op13gentle");
+    std::string profile = GetProperty("persist.sys.haptic_profile", "salamigentle");
 
     if ((effect_id & 0x8000) != 0) {
         effect_id = effect_id & 0x7fff;
         const struct effect_stream* selected = primitives;
         size_t size = ARRAY_SIZE(primitives);
 
-        if (profile == "crisp" || profile == "op13crisp") {
+        if (profile == "crisp" || profile == "salamicrisp" || profile == "salamidef") {
             selected = primitives_crisp;
             size = ARRAY_SIZE(primitives_crisp);
-        } else if (profile == "gentle" || profile == "op13gentle" || profile == "op13soft") {
+        } else if (profile == "gentle" || profile == "salamigentle" || profile == "salamisof") {
             selected = primitives_gentle;
             size = ARRAY_SIZE(primitives_gentle);
         }
@@ -83,12 +83,12 @@ const struct effect_stream* get_effect_stream(uint32_t effect_id) {
     } else if (profile == "gentle") {
         selected = effects_gentle;
         size = ARRAY_SIZE(effects_gentle);
-    } else if (profile == "op13crisp" || profile == "op13def") {
-        selected = effects_op13def;
-        size = ARRAY_SIZE(effects_op13def);
-    } else if (profile == "op13gentle" || profile == "op13soft") {
-        selected = effects_op13soft;
-        size = ARRAY_SIZE(effects_op13soft);
+    } else if (profile == "salamicrisp" || profile == "salamidef") {
+        selected = effects_salamidef;
+        size = ARRAY_SIZE(effects_salamidef);
+    } else if (profile == "salamigentle" || profile == "salamisof") {
+        selected = effects_salamisof;
+        size = ARRAY_SIZE(effects_salamisof);
     }
 
     for (size_t i = 0; i < size; i++)
