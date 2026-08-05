@@ -57,6 +57,43 @@ public class IdProviderImpl {
     }
 
     /**
+     * Required by name and signature, not merely by behaviour. StdID's static
+     * initialiser gates its entire manager on this exact reflective lookup
+     * (com.oplus.stdid.manager.a.<clinit>):
+     *
+     *   Class c = Class.forName("com.android.id.impl.IdProviderImpl");
+     *   Method m = c.getDeclaredMethod("getOUID", Context.class);
+     *   enabled = (m != null);
+     *
+     * With the class present but this one method absent, the lookup throws
+     * NoSuchMethodException, StdID logs "3014" and leaves enabled=false -- after
+     * which every getter short-circuits to "" and logs "<pkg>:3004". That is what
+     * produced, on 2026-08-04:
+     *
+     *   E StdID: com.oplus.aiunit:3004
+     *   E StdID: com.oplus.aiunit:DUID:ret:F
+     *   E AIUnit-Plugin-ImageDeglareEngine: [ProcessResult] error =
+     *       {"message":"duid can not empty.","code":805,"specificCode":5}
+     *
+     * So AI Glare reached Oplus's servers and was refused purely for an empty
+     * device header. Adding the method is what switches the manager on; the
+     * returned value only has to be non-empty and stable.
+     */
+    public String getOUID(Context context) {
+        return derive(context, "OUID");
+    }
+
+    /**
+     * The DUID path. StdID does not reflect for this one -- it is reached through
+     * the ordinary dispatch once the manager is enabled -- but it is the value
+     * AIUnit actually puts in the cloud request header, so it must be present and
+     * non-empty for the same reason.
+     */
+    public String getDUID(Context context) {
+        return derive(context, "DUID");
+    }
+
+    /**
      * Generic accessor. StdID calls this with the identifier name, e.g. "APID";
      * the DUID/OUID paths route through here too.
      */
