@@ -20,6 +20,9 @@ public class OplusFeatureConfigManager {
     }
 
     public boolean hasFeature(String name) {
+        if (name == null) {
+            return false;
+        }
         if ("oplus.software.vibrator_lmvibrator".equals(name)) {
             // OnePlus 7/8 series use old OnePlus base camera. Don't let this feature break haptic feedback.
             if (useOnePlusBaseCamera()) {
@@ -27,7 +30,15 @@ public class OplusFeatureConfigManager {
             }
             return true;
         }
-        return false;
+        // Stock dodge my_product oplus-feature flags that Melody queries.
+        switch (name) {
+            case "oplus.software.bt.ble_scan_strategymode":
+            case "oplus.software.bt.binaural_record":
+            case "oplus.software.audio_spatializer_record":
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static boolean useOnePlusBaseCamera() {
