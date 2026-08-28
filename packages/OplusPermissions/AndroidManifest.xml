@@ -121,7 +121,7 @@
 
     <permission
         android:name="com.oplus.permission.safe.IOT"
-        android:protectionLevel="signature|privileged" />
+        android:protectionLevel="normal" />
 
     <permission
         android:name="com.oplus.permission.safe.KEYGUARD"
@@ -485,7 +485,7 @@
 
     <permission
         android:name="oplus.permission.OPLUS_COMPONENT_SAFE"
-        android:protectionLevel="signature" />
+        android:protectionLevel="normal" />
 
     <permission
         android:name="oplus.permission.RECEIVE_INSTALL_BACKGROUND"
