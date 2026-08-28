@@ -129,4 +129,16 @@ public class OplusActivityManager extends OplusBaseActivityManager implements IO
     public boolean registerTaskInfoChangeListener(com.oplus.app.OplusTaskInfoChangeListener listener, int arg1, int arg2) {
         return true;
     }
+
+    // Melody calls this from Application.onCreate to exempt itself from the ColorOS
+    // background restriction list. AOSP has no such list, so there is nothing to add --
+    // but it must exist: a missing method raises NoSuchMethodError, an Error that the
+    // app's catch(Exception) around the call cannot catch, killing every Melody process
+    // at startup.
+    public void addBackgroundRestrictedInfo(String callerPkg, List<String> targetPkgList) throws RemoteException {
+    }
+
+    public List<ActivityManager.RunningAppProcessInfo> getRunningAppProcesses() throws RemoteException {
+        return new java.util.ArrayList<>();
+    }
 }
