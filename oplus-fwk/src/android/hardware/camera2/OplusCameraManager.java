@@ -64,7 +64,33 @@ public final class OplusCameraManager implements IOplusCameraManager {
 
     public void sendToProcessHeif(long ptr) {
         checkLoadLibrary();
+        fixHeifInputFormat(ptr);
         nativtSendToProcessHeif(ptr);
+    }
+
+    // ptr is APS's heifProcess block {width, height, stride, scanline, format, ...}.
+    // APS reads the input's chroma order from the gralloc handle, which our
+    // snapalloc lays out differently from stock, so NV21 input goes out as
+    // NV12 and the HEIF comes out Cb/Cr swapped.
+    private static final int HEIF_PARAM_FORMAT = 0x10;
+    private static final int HEIF_FMT_NV12 = 3;
+    private static final int HEIF_FMT_NV21 = 4;
+
+    private static void fixHeifInputFormat(long ptr) {
+        if (ptr == 0 || SystemProperties.getBoolean("debug.oplus.heif_keep_nv12", false)) {
+            return;
+        }
+        try {
+            Class<?> mem = Class.forName("libcore.io.Memory");
+            Method peek = mem.getMethod("peekInt", long.class, boolean.class);
+            if ((int) peek.invoke(null, ptr + HEIF_PARAM_FORMAT, false) != HEIF_FMT_NV12) {
+                return;
+            }
+            Method poke = mem.getMethod("pokeInt", long.class, int.class, boolean.class);
+            poke.invoke(null, ptr + HEIF_PARAM_FORMAT, HEIF_FMT_NV21, false);
+        } catch (ReflectiveOperationException e) {
+            Log.e(TAG, "fixHeifInputFormat failed", e);
+        }
     }
 
     public int sendToBufQAllocEnableEvent(long ptr) {
