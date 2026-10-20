@@ -131,7 +131,7 @@ class PenService : Service() {
 
         if (penSupportedRefreshRate != null) {
             inputManager.unregisterInputDeviceListener(inputObserver)
-            displayManager.requestMaxRefreshRate(Display.DEFAULT_DISPLAY, 0f)
+            setMaxRefreshRate(0f)
         }
 
         observer.stopObserving()
@@ -228,9 +228,29 @@ class PenService : Service() {
                 return@firstOrNull true
             } != null
 
-        displayManager.requestMaxRefreshRate(
+        setMaxRefreshRate(if (pencilStatus ?: isPenConnected) maxRefreshRate else 0f)
+    }
+
+    // Limit the default display to modes at or below maxRate (same resolution); 0 clears the limit.
+    private fun setMaxRefreshRate(maxRate: Float) {
+        if (maxRate <= 0f) {
+            displayManager.requestDisplayModes(Display.DEFAULT_DISPLAY, null)
+            return
+        }
+        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return
+        val current = display.mode
+        val modeIds =
+            display.supportedModes
+                .filter {
+                    it.physicalWidth == current.physicalWidth &&
+                        it.physicalHeight == current.physicalHeight &&
+                        it.refreshRate <= maxRate + 0.5f
+                }
+                .map { it.modeId }
+                .toIntArray()
+        displayManager.requestDisplayModes(
             Display.DEFAULT_DISPLAY,
-            if (pencilStatus ?: isPenConnected) maxRefreshRate else 0f,
+            if (modeIds.isEmpty()) null else modeIds,
         )
     }
 
