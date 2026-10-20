@@ -246,3 +246,6 @@
 /dev/ufcs_dev                         u:object_r:wlchg_device:s0
 /dev/wlchg                            u:object_r:wlchg_device:s0
 /dev/wls_dev                          u:object_r:wlchg_device:s0
+
+# Stock cnss-daemon installed under its own name
+/vendor/bin/cnss-daemon-oplus                                         u:object_r:vendor_wcnss_service_exec:s0
