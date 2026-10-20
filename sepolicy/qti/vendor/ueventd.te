@@ -1,1 +1,2 @@
 rw_dir_file(ueventd, vendor_persist_display_file)
+r_dir_file(ueventd, vendor_persist_wcnss_service_file)
