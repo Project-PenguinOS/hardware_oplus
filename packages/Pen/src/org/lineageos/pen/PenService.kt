@@ -219,8 +219,8 @@ class PenService : Service() {
                     return@firstOrNull false
                 }
                 if (
-                    device.bluetoothAddress?.startsWith("C0:87:06") == false &&
-                        device.bluetoothAddress?.startsWith("F8:6F:DE") == false
+                    device.bluetoothAddress?.startsWith("C0:87:06", ignoreCase = true) == false &&
+                        device.bluetoothAddress?.startsWith("F8:6F:DE", ignoreCase = true) == false
                 ) {
                     // Not a Maxeye/Goodix MAC prefix
                     return@firstOrNull false
