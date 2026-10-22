@@ -252,3 +252,6 @@
 
 # UFS LUN bsg nodes (lun4 has its own label upstream)
 /dev/0:0:0:[0-35]                                                      u:object_r:vendor_ufs_lun_bsg_device:s0
+
+# SP-HAL loaded into system_server and surfaceflinger by the graphics stack
+/vendor/lib64/libubwcp\.so                                            u:object_r:same_process_hal_file:s0

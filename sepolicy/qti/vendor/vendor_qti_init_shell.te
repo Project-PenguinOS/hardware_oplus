@@ -12,3 +12,6 @@ create_dir_file(vendor_qti_init_shell, mnt_vendor_file)
 rw_dir_file(vendor_qti_init_shell, vendor_proc_oplus_scheduler)
 
 allow vendor_qti_init_shell { vendor_sysfs_scsi_target vendor_proc_swappiness }:file w_file_perms;
+
+# read_ahead_kb and similar block queue tunables are labelled plain sysfs
+allow vendor_qti_init_shell sysfs:file w_file_perms;
