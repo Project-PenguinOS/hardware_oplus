@@ -23,3 +23,5 @@ r_dir_file(hal_oplus_sensor_aidl, vendor_persist_engineer_file)
 r_dir_file(hal_oplus_sensor_aidl, vendor_persist_sensors_file)
 rw_dir_file(hal_oplus_sensor_aidl, vendor_proc_eng_cali_file)
 rw_dir_file(hal_oplus_sensor_aidl, vendor_proc_oplus_als_file)
+
+get_prop(hal_oplus_sensor_aidl, vendor_sensors_prop)

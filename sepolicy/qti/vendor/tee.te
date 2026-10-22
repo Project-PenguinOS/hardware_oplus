@@ -11,3 +11,8 @@ allow tee fingerprint_vendor_data_file:file create_file_perms;
 
 allow tee vendor_data_file:dir rw_dir_perms;
 allow tee vendor_data_file:file r_file_perms;
+
+# Secure-boot partition reads through the UFS LUN nodes
+allow tee vendor_ufs_lun_bsg_device:chr_file rw_file_perms;
+allow tee { vendor_xbl_block_device boot_block_device }:blk_file r_file_perms;
+allow tee vendor_gpt_block_device:blk_file { open read getattr };

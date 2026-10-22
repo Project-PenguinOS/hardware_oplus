@@ -48,3 +48,6 @@ type aac_richtap_device, dev_type;
 
 # Wlchgmonitor
 type wlchg_device, dev_type;
+
+# UFS LUN bsg nodes (/dev/0:0:0:N) the TEE reads partitions through
+type vendor_ufs_lun_bsg_device, dev_type;

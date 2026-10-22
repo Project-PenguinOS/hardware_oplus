@@ -249,3 +249,6 @@
 
 # Stock cnss-daemon installed under its own name
 /vendor/bin/cnss-daemon-oplus                                         u:object_r:vendor_wcnss_service_exec:s0
+
+# UFS LUN bsg nodes (lun4 has its own label upstream)
+/dev/0:0:0:[0-35]                                                      u:object_r:vendor_ufs_lun_bsg_device:s0
