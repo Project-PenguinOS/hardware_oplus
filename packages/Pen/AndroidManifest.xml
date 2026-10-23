@@ -6,6 +6,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="org.lineageos.pen">
 
+    <permission android:name="org.lineageos.pen.permission.PEN_SDK"
+                android:protectionLevel="signature|privileged" />
+
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
@@ -27,7 +30,12 @@
             </intent-filter>
         </receiver>
         <service
-            android:exported="false"
-            android:name=".PenService" />
+            android:exported="true"
+            android:name=".PenService"
+            android:permission="org.lineageos.pen.permission.PEN_SDK">
+            <intent-filter>
+                <action android:name="org.lineageos.pen.SDK" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

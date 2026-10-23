@@ -16,10 +16,38 @@ object PenProtocol {
     val INTERFACE_SERVICE_UUID = UUID.fromString("18092dbc-2a69-11ec-8d3d-0242ac130003")
     val INTERFACE_CHAR_UUID = UUID.fromString("18093046-2a69-11ec-8d3d-0242ac130003")
 
+    // Optional pen events: double tap, battery level, charging state
+    val EVENT_SERVICE_UUID = UUID.fromString("18093398-2a69-11ec-8d3d-0242ac130003")
+    val DOUBLE_TAP_CHAR_UUID = UUID.fromString("180938ac-2a69-11ec-8d3d-0242ac130003")
+    val BATTERY_CHAR_UUID = UUID.fromString("180937bc-2a69-11ec-8d3d-0242ac130003")
+    val CHARGING_CHAR_UUID = UUID.fromString("1809396a-2a69-11ec-8d3d-0242ac130003")
+
     const val MTU = 100
 
     const val NODE_PENCIL_CONNECTED = 32
+    const val NODE_WRITING_FEEDBACK = 38
     const val NODE_BT_INFO = 169
+
+    const val WRITING_FEEDBACK_START = "3"
+    const val WRITING_FEEDBACK_STOP = "2"
+
+    const val CHARGING_STATE_CHARGING = 32
+
+    const val VIBRATION_TYPE_MAX = 4
+    const val VIBRATION_LEVEL_MAX = 3
+
+    val BATTERY_QUERY = byteArrayOf(0x2C, 0x06, 0x01, 0x05)
+    val VIBRATE_ONCE = byteArrayOf(0x2C, 0x92.toByte(), 0x01, 0x02, 0xFF.toByte(), 0x02)
+
+    // level 0 turns the writing feedback off, 1..VIBRATION_LEVEL_MAX sets its strength
+    fun vibrationType(type: Int, level: Int) =
+        byteArrayOf(
+            0x2C,
+            0x94.toByte(),
+            0x02,
+            type.coerceIn(0, VIBRATION_TYPE_MAX).toByte(),
+            level.coerceIn(0, VIBRATION_LEVEL_MAX).toByte(),
+        )
 
     const val PRESSURE_CLEAR = "aa0101020000"
 

@@ -23,6 +23,8 @@ import android.os.IBinder
 import android.os.UEventObserver
 import android.util.Log
 import android.view.Display
+import java.io.FileDescriptor
+import java.io.PrintWriter
 
 class PenService : Service() {
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
@@ -34,15 +36,21 @@ class PenService : Service() {
         getString(R.string.config_penSupportedRefreshRate).toFloatOrNull()
     }
 
-    private val penRelay by lazy {
+    private val penRelay: PenRelay? by lazy {
         if (resources.getBoolean(R.bool.config_penPressureRelay)) {
-            PenRelay(this) { isActive -> handler.post { onPencilStatusChanged(isActive) } }
+            PenRelay(
+                this,
+                { isActive -> handler.post { onPencilStatusChanged(isActive) } },
+                { event -> sdk.onEvent(event) },
+            )
         } else {
             null
         }
     }
 
     private val handler by lazy { Handler(mainLooper) }
+
+    private val sdk: PenSdk by lazy { PenSdk { penRelay } }
 
     private var pencilStatus: Boolean? = null
     private var isActiveAckSent = false
@@ -104,7 +112,13 @@ class PenService : Service() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? =
+        if (intent?.action == PenSdk.ACTION_SDK) sdk else null
+
+    override fun dump(fd: FileDescriptor, writer: PrintWriter, args: Array<String>) {
+        writer.println("pencilStatus=$pencilStatus")
+        sdk.dump(writer, args)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -143,6 +157,7 @@ class PenService : Service() {
     }
 
     private fun onPencilStatusChanged(isActive: Boolean?) {
+        sdk.onConnectionChanged(isActive != null)
         if (pencilStatus != isActive) {
             pencilStatus = isActive
             updateRefreshRateCap()

@@ -106,6 +106,14 @@ class TouchHal(private val onCommand: (String) -> Unit) {
         }
     }
 
+    fun writeNodeOneWay(nodeFlag: Int, value: String) {
+        try {
+            getService()?.touchWriteNodeFileOneWay(0, nodeFlag, value)
+        } catch (e: RemoteException) {
+            Log.e(TAG, "touchWriteNodeFileOneWay($nodeFlag) failed", e)
+        }
+    }
+
     fun writeNode(nodeFlag: Int, value: String) {
         try {
             getService()?.touchWriteNodeFile(0, nodeFlag, value)

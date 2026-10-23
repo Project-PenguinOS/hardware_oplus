@@ -21,6 +21,7 @@ import android.os.Process
 class PenRelay(
     private val context: Context,
     private val onPencilStatusChanged: (Boolean?) -> Unit,
+    private val onEvent: (PenEvent) -> Unit,
 ) {
     private val bluetoothManager by lazy { context.getSystemService(BluetoothManager::class.java) }
 
@@ -88,6 +89,26 @@ class PenRelay(
         session?.sendPencilStatusAck(isActive)
     }
 
+    val hasInterface: Boolean
+        get() = session?.hasInterface == true
+
+    fun sendInterfaceCommand(command: ByteArray): Boolean {
+        val target = session?.takeIf { it.hasInterface } ?: return false
+        target.sendInterfaceCommand(command)
+        return true
+    }
+
+    // The touch IC drives the pen motor itself, so this goes through the touch HAL, not BLE
+    fun setWritingFeedback(isActive: Boolean) {
+        if (session == null) {
+            return
+        }
+        touchHal.writeNodeOneWay(
+            PenProtocol.NODE_WRITING_FEEDBACK,
+            if (isActive) PenProtocol.WRITING_FEEDBACK_START else PenProtocol.WRITING_FEEDBACK_STOP,
+        )
+    }
+
     // GATT callbacks stop once Bluetooth goes down, so sessions must be dropped explicitly
     private fun closeAll() {
         probing.values.toList().forEach { it.close() }
@@ -109,6 +130,7 @@ class PenRelay(
                 ::onSessionReady,
                 ::onSessionClosed,
                 ::onPencilStatus,
+                ::onSessionEvent,
             )
         probing[device.address] = newSession
         newSession.open()
@@ -126,6 +148,12 @@ class PenRelay(
         if (session === closed) {
             session = null
             onPencilStatusChanged(null)
+        }
+    }
+
+    private fun onSessionEvent(from: PenGattSession, event: PenEvent) {
+        if (session === from) {
+            onEvent(event)
         }
     }
 

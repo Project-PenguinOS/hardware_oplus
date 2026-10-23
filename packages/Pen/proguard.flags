@@ -1,3 +1,7 @@
+-keep class org.lineageos.pen.sdk.** {
+  *;
+}
+
 -keep class org.lineageos.pen.* {
   *;
 }
