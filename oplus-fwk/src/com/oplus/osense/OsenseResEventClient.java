@@ -1,10 +1,10 @@
 package com.oplus.osense;
 
-import android.content.Context;
 import com.oplus.osense.eventinfo.EventConfig;
 import com.oplus.osense.eventinfo.OsenseEventCallback;
-import android.os.Bundle;
 import com.oplus.osense.task.BgRunningCallback;
+import android.os.Bundle;
+import android.content.Context;
 
 public class OsenseResEventClient {
 
@@ -25,6 +25,10 @@ public class OsenseResEventClient {
         return 0;
     }
 
+    public int unregisterEventCallback(OsenseEventCallback callback) {
+        return 0;
+    }
+
     public void requestSceneAction(Bundle bundle) {
         return;
     }
@@ -33,10 +37,11 @@ public class OsenseResEventClient {
         return 0;
     }
 
-    public void startBackgroundRunning(Context context, int type, BgRunningCallback callback) {
+    public void startBackgroundRunning(Context context, int bgMode, BgRunningCallback callback) {
+        return;
     }
 
-    public boolean stopBackgroundRunning(Context context, int type) {
-        return false;
+    public boolean stopBackgroundRunning(Context context, int requestId) {
+        return true;
     }
 }
