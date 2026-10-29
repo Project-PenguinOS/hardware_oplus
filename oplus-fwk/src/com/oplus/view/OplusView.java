@@ -21,6 +21,14 @@ public class OplusView {
 
     public void damageInParent() {}
 
+    public static boolean setClipExpandSize(View view, int left, int top, int right, int bottom) {
+        return false;
+    }
+
+    public static boolean setShadowClippingEnabled(View view, boolean enabled) {
+        return false;
+    }
+
     public void setOverrideLightSourceGeometry(float lightX, float lightY, float lightZ,
             float lightRadius, float blurRadius) {}
 

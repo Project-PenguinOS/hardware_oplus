@@ -141,4 +141,16 @@ public class OplusActivityManager extends OplusBaseActivityManager implements IO
     public List<ActivityManager.RunningAppProcessInfo> getRunningAppProcesses() throws RemoteException {
         return new java.util.ArrayList<>();
     }
+
+    // The COS17 camera registers for floating/zoom-window scene changes. There is no
+    // osense scene service here, so report the registration as refused.
+    public boolean registerComplexSceneObserver(Bundle bundle,
+            com.oplus.osense.complexscene.OplusComplexSceneObserver observer) throws RemoteException {
+        return false;
+    }
+
+    public boolean unregisterComplexSceneObserver(Bundle bundle,
+            com.oplus.osense.complexscene.OplusComplexSceneObserver observer) throws RemoteException {
+        return false;
+    }
 }
