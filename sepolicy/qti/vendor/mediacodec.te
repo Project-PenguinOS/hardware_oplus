@@ -5,3 +5,6 @@ binder_call(mediacodec, hal_dms_default)
 
 set_prop(mediacodec, vendor_dolby_vision_prop)
 set_prop(mediacodec, vendor_video_prop)
+
+# Oplus codec components read camera configuration while recording.
+get_prop(mediacodec, vendor_camera_prop)

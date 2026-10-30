@@ -1,0 +1,2 @@
+# The vendor media extensions read GPP configuration through the media service.
+get_prop(mediaserver, vendor_sys_gpp_prop)

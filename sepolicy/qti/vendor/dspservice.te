@@ -1,0 +1,2 @@
+# Preserve the Qualcomm isolated-compute DSP client on Android 17.
+typeattribute vendor_hal_dspmanager_aidlservice isolated_compute_allowed_service;

@@ -1,0 +1,2 @@
+# Oplus media components query vendor display configuration.
+get_prop(mediaserver, vendor_display_prop)
