@@ -35,6 +35,11 @@ public class OplusFeatureConfigManager {
             case "oplus.software.bt.ble_scan_strategymode":
             case "oplus.software.bt.binaural_record":
             case "oplus.software.audio_spatializer_record":
+            // O-Reality (AudioX) features queried by AudioEffectCenter.
+            case "oplus.software.audio.audioeffect_support":
+            case "oplus.software.audio.audiox_support":
+            case "oplus.software.audio.dualspk_support":
+            case "oplus.software.audio.effect.combined":
                 return true;
             default:
                 return false;

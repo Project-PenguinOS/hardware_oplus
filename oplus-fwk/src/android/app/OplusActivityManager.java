@@ -142,6 +142,27 @@ public class OplusActivityManager extends OplusBaseActivityManager implements IO
         return new java.util.ArrayList<>();
     }
 
+    // AudioEffectCenter maps the pids of a shared-uid app to package names with this.
+    // Only RemoteException is caught around it, so a missing method would kill the
+    // service with NoSuchMethodError.
+    public List<ActivityManager.RunningAppProcessInfo> getRunningAppProcessInfos(List<Integer> pids)
+            throws RemoteException {
+        List<ActivityManager.RunningAppProcessInfo> result = new java.util.ArrayList<>();
+        if (pids == null) {
+            return result;
+        }
+        List<ActivityManager.RunningAppProcessInfo> all = ActivityManager.getService().getRunningAppProcesses();
+        if (all == null) {
+            return result;
+        }
+        for (ActivityManager.RunningAppProcessInfo info : all) {
+            if (pids.contains(info.pid)) {
+                result.add(info);
+            }
+        }
+        return result;
+    }
+
     // The COS17 camera registers for floating/zoom-window scene changes. There is no
     // osense scene service here, so report the registration as refused.
     public boolean registerComplexSceneObserver(Bundle bundle,

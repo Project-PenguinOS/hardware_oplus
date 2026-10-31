@@ -87,4 +87,15 @@ public class OplusActivityTaskManager extends OplusBaseActivityTaskManager imple
             reply.recycle();
         }
     }
+
+    // AudioEffectCenter registers for task changes (holo audio, zoom window). There is no
+    // OPlus task info dispatcher here, so report the registration as refused.
+    public boolean registerTaskInfoChangeListener(com.oplus.app.OplusTaskInfoChangeListener listener,
+            int arg1, int arg2) {
+        return false;
+    }
+
+    public boolean unregisterTaskInfoChangeListener(com.oplus.app.OplusTaskInfoChangeListener listener) {
+        return false;
+    }
 }
