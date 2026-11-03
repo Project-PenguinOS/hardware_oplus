@@ -14,6 +14,9 @@ vendor.oplus.hardware.communicationcenter.IDmtpService/default    u:object_r:hal
 # CommonDcs
 vendor.oplus.hardware.commondcs.ICommonDcsAidlHalService/default    u:object_r:hal_oplus_commondcs_aidl_service:s0
 
+# Cryptoeng
+vendor.oplus.hardware.cryptoeng.ICryptoeng/default    u:object_r:hal_cryptoeng_service:s0
+
 # CWB
 vendor.oplus.hardware.cwb.ICwbService/default    u:object_r:hal_oplus_cwb_aidl_service:s0
 

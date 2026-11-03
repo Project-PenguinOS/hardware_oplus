@@ -31,6 +31,7 @@
 
 # CryptoEng
 /(odm|vendor/odm)/bin/hw/vendor\.oplus\.hardware\.cryptoeng@1\.0-service           u:object_r:hal_cryptoeng_default_exec:s0
+/data/vendor_de/[0-9]+/cryptoeng(/.*)?                                           u:object_r:cryptoeng_data_file:s0
 
 # Display
 /odm/bin/hw/vendor\.oplus\.hardware\.displaypanelfeature-service    u:object_r:hal_oplus_displaypanelfeature_aidl_exec:s0
