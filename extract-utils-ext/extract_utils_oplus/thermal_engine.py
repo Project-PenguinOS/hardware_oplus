@@ -52,12 +52,16 @@ class ControlConfig(NamedTuple):
     # tempGear -> (cpu level, gpu level)
     gears: Dict[int, Tuple[int, int]]
     clusters: int
+    # Higher CPU limits stock allows for touch and launch boosts
+    cpu_boost_levels: Dict[int, List[int]]
 
 
 class Level(NamedTuple):
     temp: int
     clr: int
     limits: List[int]
+    # CPU limits for when the user is not interacting, if stricter than limits
+    idle: Optional[List[int]] = None
 
 
 def get_member(value: Any, *keys: str) -> Any:
@@ -192,7 +196,7 @@ def read_control_config(control_config_path: str) -> ControlConfig:
     if root.tag != 'sys_thermal_control_list':
         raise ValueError(f'Failed to parse {control_config_path}')
 
-    config = ControlConfig({}, {}, {}, 0)
+    config = ControlConfig({}, {}, {}, 0, {})
     clusters = 0
 
     for feature in root.iterfind('feature'):
@@ -207,6 +211,12 @@ def read_control_config(control_config_path: str) -> ControlConfig:
                     ]
                     clusters = max(clusters, len(freqs))
                     config.cpu_levels[index] = freqs
+                    boost = [
+                        parse_int(freq)
+                        for freq in (level.get('boostCeiling') or '').split(',')
+                    ]
+                    if len(boost) == len(freqs):
+                        config.cpu_boost_levels[index] = boost
                 elif c.get('name') == 'thermal_gpulevel':
                     config.gpu_levels[index] = parse_int(
                         level.get('maxGpuFreq')
@@ -230,9 +240,20 @@ def read_control_config(control_config_path: str) -> ControlConfig:
     return config._replace(clusters=clusters)
 
 
-def build_levels(control: ControlConfig, model: StatusModel) -> List[Level]:
+def build_levels(
+    control: ControlConfig,
+    model: StatusModel,
+    boost_ceiling_below: Optional[int] = None,
+) -> List[Level]:
+    """
+    With boost_ceiling_below, CPU limits are the stock boost ceilings, the
+    limits stock allows during touch and launch boosts. Levels from
+    boost_ceiling_below (C) up also carry the stock limits as idle limits, for
+    the power HAL to apply while the user is not interacting.
+    """
     levels: List[Level] = []
     cpu_limits = [NO_LIMIT] * control.clusters
+    cpu_idle = [NO_LIMIT] * control.clusters
     gpu_limit = NO_LIMIT
 
     for up, down, status in zip(model.up, model.down, model.status):
@@ -241,22 +262,42 @@ def build_levels(control: ControlConfig, model: StatusModel) -> List[Level]:
 
         cpu_level, gpu_level = control.gears[status]
 
-        for c, freq in enumerate(control.cpu_levels.get(cpu_level, [])):
+        freqs = control.cpu_levels.get(cpu_level, [])
+        boost = control.cpu_boost_levels.get(cpu_level, freqs)
+        if boost_ceiling_below is None:
+            boost = freqs
+
+        for c, (freq, ceiling) in enumerate(zip(freqs, boost)):
             if freq >= 0:
-                cpu_limits[c] = freq
+                cpu_idle[c] = freq
+                cpu_limits[c] = max(ceiling, freq)
 
         if control.gpu_levels.get(gpu_level, -1) >= 0:
             gpu_limit = control.gpu_levels[gpu_level]
 
         limits = cpu_limits + [gpu_limit]
+        idle = None
+        if (
+            boost_ceiling_below is not None
+            and up >= boost_ceiling_below
+            and cpu_idle != cpu_limits
+        ):
+            idle = list(cpu_idle)
+            # The power HAL finds the idle limits from the CPU limits in
+            # effect, so a hotter level with the same CPU limits as a cooler
+            # one keeps that level's idle limits.
+            for level in levels:
+                if level.limits[: control.clusters] == cpu_limits:
+                    idle = level.idle
+                    break
 
         if levels:
-            redundant = levels[-1].limits == limits
+            redundant = levels[-1].limits == limits and levels[-1].idle == idle
         else:
             redundant = all(limit == NO_LIMIT for limit in limits)
 
         if not redundant:
-            levels.append(Level(up * 1000, down * 1000, limits))
+            levels.append(Level(up * 1000, down * 1000, limits, idle))
 
     return levels
 
@@ -274,6 +315,7 @@ def generate_thermal_engine_config(
     horae_config_path: str,
     horae_target_config_path: str,
     project_name: Optional[str] = None,
+    boost_ceiling_below: Optional[int] = None,
 ) -> str:
     control = read_control_config(control_config_path)
     horae = read_horae_config(horae_target_config_path)
@@ -295,7 +337,7 @@ def generate_thermal_engine_config(
     if model is None:
         raise ValueError(f'No thermal_status_model in {horae_config_path}')
 
-    levels = build_levels(control, model)
+    levels = build_levels(control, model, boost_ceiling_below)
     if not levels:
         raise ValueError(f'No thermal levels in {control_config_path}')
 
@@ -303,6 +345,22 @@ def generate_thermal_engine_config(
     actions = '+'.join(devices)
 
     config = ''
+    if any(level.idle for level in levels):
+        # Read by the power HAL: while the user is not interacting it applies
+        # the idle CPU limits of the CPU limits thermal-engine has in effect.
+        config += '# Interactive CPU limits: <limits> <idle limits>\n'
+        for level in levels:
+            if level.idle:
+                config += format_values(
+                    '# idle_limits',
+                    [
+                        '+'.join(map(str, level.limits[: control.clusters])),
+                        '+'.join(map(str, level.idle)),
+                    ],
+                )
+                config += '\n'
+        config += '\n'
+
     for sensor in sensors:
         # Shell zones have no trip notifications. Keep a virtual sensor active
         # so its timed wait polls the underlying temperature. A descending gate
@@ -362,6 +420,7 @@ def add_generated_thermal_engine_config(
     module: ExtractUtilsModule,
     project_name: Optional[str] = None,
     horae_target_config: str = HORAE_TARGET_CONFIG,
+    boost_ceiling_below: Optional[int] = None,
 ) -> GeneratedProprietaryFile:
     """
     Generate /vendor/etc/thermal-engine.conf out of the stock
@@ -374,6 +433,11 @@ def add_generated_thermal_engine_config(
     destination path of the target Horae config and has to be extracted by
     the module beforehand. project_name selects its entry, the first one
     with shell sensors is used if it's missing.
+
+    With boost_ceiling_below set, thermal-engine limits the CPUs to the stock
+    boost ceilings, like stock does during touch and launch boosts. From that
+    temperature (C) on, the stock limits are listed as idle limits for the
+    power HAL to apply while the user is not interacting.
     """
 
     def fix_file_list(file_list: FileList):
@@ -397,6 +461,7 @@ def add_generated_thermal_engine_config(
             find_extracted_file(module, HORAE_CONFIG),
             find_extracted_file(module, horae_target_config),
             project_name,
+            boost_ceiling_below,
         ).strip()
 
         with open(file_path, 'w', encoding='utf-8') as f:
