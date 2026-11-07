@@ -8,6 +8,9 @@
 #include <aidl/vendor/lineage/oplus_als/IAreaCapture.h>
 #include <android-base/logging.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include <time.h>
 
 namespace android {
@@ -32,6 +35,10 @@ std::chrono::nanoseconds GetBootTime() {
         return 0ns;
     }
     return std::chrono::seconds(time.tv_sec) + std::chrono::nanoseconds(time.tv_nsec);
+}
+
+int32_t ToChannel(float value) {
+    return std::isfinite(value) ? std::clamp(static_cast<int32_t>(std::lround(value)), 0, 255) : 0;
 }
 
 }  // namespace
@@ -112,7 +119,7 @@ void AlsSampler::threadLoop() {
             state->immediate = false;
         }
 
-        if (service == nullptr) {
+        if (service == nullptr || !AIBinder_isAlive(service->asBinder().get())) {
             service = GetService<IAreaCapture>();
         }
 
@@ -123,15 +130,18 @@ void AlsSampler::threadLoop() {
         } else {
             const auto frame_start = GetBootTime();
             AreaRgbCaptureResult result = {};
-            if (service->getAreaBrightness(&result).isOk()) {
-                sample = CwbSample{static_cast<int32_t>(result.r), static_cast<int32_t>(result.g),
-                                   static_cast<int32_t>(result.b), frame_start, GetBootTime()};
+            const auto status = service->getAreaBrightness(&result);
+            if (status.isOk()) {
+                sample = CwbSample{ToChannel(result.r), ToChannel(result.g), ToChannel(result.b),
+                                   frame_start, GetBootTime()};
+                next_sample += period;
+                if (next_sample < std::chrono::steady_clock::now()) {
+                    next_sample = std::chrono::steady_clock::now();
+                }
             } else {
-                LOG(WARNING) << "IAreaCapture::getAreaBrightness failed";
-            }
-            next_sample += period;
-            if (next_sample < std::chrono::steady_clock::now()) {
-                next_sample = std::chrono::steady_clock::now();
+                LOG(WARNING) << "IAreaCapture::getAreaBrightness failed: "
+                             << status.getDescription();
+                next_sample = std::chrono::steady_clock::now() + kServiceRetryPeriod;
             }
         }
 
