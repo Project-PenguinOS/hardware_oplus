@@ -7,7 +7,12 @@
 #pragma once
 
 #include <aidl/vendor/lineage/oplus_als/BnAreaCapture.h>
+#include <ui/DisplayId.h>
 #include <ui/Rect.h>
+#include <ui/Rotation.h>
+
+#include <optional>
+#include <vector>
 
 namespace aidl {
 namespace vendor {
@@ -20,9 +25,18 @@ class AreaCapture : public BnAreaCapture {
     ndk::ScopedAStatus getAreaBrightness(AreaRgbCaptureResult* _aidl_return) override;
 
   private:
-    static ::android::sp<::android::IBinder> getInternalDisplayToken();
+    struct CaptureArea {
+        ::android::Rect crop;
+        ::android::ui::Rotation rotation;
+    };
+
+    std::optional<CaptureArea> getCaptureArea(
+            ::android::PhysicalDisplayId displayId,
+            const ::android::sp<::android::IBinder>& displayToken) const;
 
     ::android::Rect m_screenshot_rect;
+    // Per-pixel weights of the grab area in panel orientation, row major.
+    std::vector<float> m_weights;
 };
 
 }  // namespace oplus_als

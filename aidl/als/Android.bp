@@ -19,6 +19,7 @@ cc_binary {
         "libbinder",
         "libbinder_ndk",
         "libgui",
+        "libjsoncpp",
         "libui",
         "libutils",
         "liblog",
