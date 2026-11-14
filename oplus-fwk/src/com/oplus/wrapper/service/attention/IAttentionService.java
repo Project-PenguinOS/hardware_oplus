@@ -30,27 +30,27 @@ public interface IAttentionService {
                     public void checkAttention(
                             android.service.attention.IAttentionCallback callback)
                             throws RemoteException {
-                        Stub.this.checkAttention(wrap(callback));
+                        com.oplus.wrapper.service.attention.IAttentionService.Stub.this.checkAttention(wrap(callback));
                     }
 
                     @Override
                     public void cancelAttentionCheck(
                             android.service.attention.IAttentionCallback callback)
                             throws RemoteException {
-                        Stub.this.cancelAttentionCheck(wrap(callback));
+                        com.oplus.wrapper.service.attention.IAttentionService.Stub.this.cancelAttentionCheck(wrap(callback));
                     }
 
                     @Override
                     public void onStartProximityUpdates(
                             android.service.attention.IProximityUpdateCallback callback)
                             throws RemoteException {
-                        Stub.this.onStartProximityUpdates(callback == null ? null
+                        com.oplus.wrapper.service.attention.IAttentionService.Stub.this.onStartProximityUpdates(callback == null ? null
                                 : new IProximityUpdateCallback.Stub.Proxy(callback));
                     }
 
                     @Override
                     public void onStopProximityUpdates() throws RemoteException {
-                        Stub.this.onStopProximityUpdates();
+                        com.oplus.wrapper.service.attention.IAttentionService.Stub.this.onStopProximityUpdates();
                     }
                 };
 

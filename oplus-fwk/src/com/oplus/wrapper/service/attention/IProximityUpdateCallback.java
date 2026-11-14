@@ -18,7 +18,7 @@ public interface IProximityUpdateCallback {
                 new android.service.attention.IProximityUpdateCallback.Stub() {
                     @Override
                     public void onProximityUpdate(double distance) throws RemoteException {
-                        Stub.this.onProximityUpdate(distance);
+                        com.oplus.wrapper.service.attention.IProximityUpdateCallback.Stub.this.onProximityUpdate(distance);
                     }
                 };
 

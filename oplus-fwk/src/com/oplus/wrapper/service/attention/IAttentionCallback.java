@@ -20,12 +20,12 @@ public interface IAttentionCallback {
                 new android.service.attention.IAttentionCallback.Stub() {
                     @Override
                     public void onSuccess(int result, long timestamp) throws RemoteException {
-                        Stub.this.onSuccess(result, timestamp);
+                        com.oplus.wrapper.service.attention.IAttentionCallback.Stub.this.onSuccess(result, timestamp);
                     }
 
                     @Override
                     public void onFailure(int error) throws RemoteException {
-                        Stub.this.onFailure(error);
+                        com.oplus.wrapper.service.attention.IAttentionCallback.Stub.this.onFailure(error);
                     }
                 };
 
