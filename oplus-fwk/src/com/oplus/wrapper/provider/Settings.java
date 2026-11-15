@@ -15,4 +15,13 @@ public class Settings {
             return android.provider.Settings.System.getIntForUser(cr, name, def, userHandle);
         }
     }
+
+    public static final class Secure {
+        private Secure() {
+        }
+
+        public static int getIntForUser(ContentResolver cr, String name, int def, int userHandle) {
+            return android.provider.Settings.Secure.getIntForUser(cr, name, def, userHandle);
+        }
+    }
 }
