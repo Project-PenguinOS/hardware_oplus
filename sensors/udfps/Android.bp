@@ -3,29 +3,46 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+rust_defaults {
+    name: "libudfps_sensor_rust-defaults",
+    crate_name: "udfps_sensor",
+    vendor: true,
+    srcs: ["udfps.rs"],
+    rustlibs: [
+        "liblibc",
+        "liblog_rust",
+        "liblogger",
+    ],
+}
+
+rust_ffi_static {
+    name: "libudfps_sensor_rust",
+    defaults: ["libudfps_sensor_rust-defaults"],
+}
+
+rust_test {
+    name: "libudfps_sensor_rust-test",
+    defaults: ["libudfps_sensor_rust-defaults"],
+    test_suites: ["general-tests"],
+}
+
 cc_library_shared {
     name: "sensors.oplus",
     defaults: ["hidl_defaults"],
-    srcs: [
-        "Sensor.cpp",
-        "SensorsSubHal.cpp",
-    ],
+    srcs: ["SensorsSubHal.cpp"],
     shared_libs: [
         "android.hardware.sensors@1.0",
         "android.hardware.sensors@2.0",
         "android.hardware.sensors@2.0-ScopedWakelock",
         "android.hardware.sensors@2.1",
-        "libcutils",
-        "libfmq",
-        "libhardware",
         "libhidlbase",
         "liblog",
-        "libpower",
         "libutils",
     ],
     static_libs: [
         "android.hardware.sensors@1.0-convert",
         "android.hardware.sensors@2.X-multihal",
+        "libudfps_sensor_rust",
     ],
     cflags: [
         "-DLOG_TAG=\"sensors.oplus\"",
