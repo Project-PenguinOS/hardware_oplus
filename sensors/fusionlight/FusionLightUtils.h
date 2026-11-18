@@ -5,9 +5,16 @@
 
 #pragma once
 
+#include <android-base/logging.h>
 #include <android/binder_auto_utils.h>
 #include <android/binder_manager.h>
 #include <Eigen/Core>
+
+#include <chrono>
+#include <future>
+#include <memory>
+#include <string>
+#include <thread>
 
 namespace android {
 namespace hardware {
@@ -104,18 +111,28 @@ std::shared_ptr<Interface> GetService() {
     return binder.get() == nullptr ? nullptr : Interface::fromBinder(binder);
 }
 
-// For one-shot calls to services that may be lazy (oneshot and stopped after use).
-// checkService never starts those; getService does, waiting at most 5 s.
+// For one-shot calls to services that may be lazy (oneshot and stopped after use). Only
+// waitForService makes servicemanager start them; checkService and getService just poll.
+// waitForService never gives up, so it runs on a helper thread that is left behind if the
+// service has not come up within kServiceStartTimeout.
+constexpr std::chrono::seconds kServiceStartTimeout{5};
+
 template <typename Interface>
 std::shared_ptr<Interface> GetDeclaredService() {
     const std::string instance = std::string(Interface::descriptor) + "/default";
     if (!AServiceManager_isDeclared(instance.c_str())) {
         return nullptr;
     }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    ndk::SpAIBinder binder(AServiceManager_getService(instance.c_str()));
-#pragma clang diagnostic pop
+    auto result = std::make_shared<std::promise<ndk::SpAIBinder>>();
+    auto binder_future = result->get_future();
+    std::thread([instance, result] {
+        result->set_value(ndk::SpAIBinder(AServiceManager_waitForService(instance.c_str())));
+    }).detach();
+    if (binder_future.wait_for(kServiceStartTimeout) != std::future_status::ready) {
+        LOG(ERROR) << instance << " did not start within " << kServiceStartTimeout.count() << " s";
+        return nullptr;
+    }
+    ndk::SpAIBinder binder = binder_future.get();
     return binder.get() == nullptr ? nullptr : Interface::fromBinder(binder);
 }
 
