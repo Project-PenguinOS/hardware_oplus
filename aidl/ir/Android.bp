@@ -1,6 +1,7 @@
 rust_defaults {
     name: "android.hardware.ir-service.oplus-defaults",
     vendor: true,
+    prefer_rlib: true,
     srcs: ["main.rs"],
     rustlibs: [
         "android.hardware.ir-V1-rust",
