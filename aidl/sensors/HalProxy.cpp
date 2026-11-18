@@ -16,8 +16,6 @@
 
 #include "HalProxy.h"
 
-#include "AlsCorrection.h"
-
 #include <android/hardware/sensors/2.0/types.h>
 
 #include <android-base/file.h>
@@ -523,6 +521,9 @@ void HalProxy::initializeSubHalListFromConfigFile(const char* configFileName) {
     }
 }
 
+// The QTI light sensor that reports lux; listed as the standard light sensor.
+static constexpr int kSensorTypeQtiWiseLight = 33171103;
+
 void HalProxy::initializeSensorList() {
     for (size_t subHalIndex = 0; subHalIndex < mSubHalList.size(); subHalIndex++) {
         auto result = mSubHalList[subHalIndex]->getSensorsList([&](const auto& list) {
@@ -533,10 +534,9 @@ void HalProxy::initializeSensorList() {
                     ALOGV("Loaded sensor: %s", sensor.name.c_str());
                     sensor.sensorHandle = setSubHalIndex(sensor.sensorHandle, subHalIndex);
                     setDirectChannelFlags(&sensor, mSubHalList[subHalIndex]);
-                    if (static_cast<int>(sensor.type) == SENSOR_TYPE_QTI_WISE_LIGHT) {
+                    if (static_cast<int>(sensor.type) == kSensorTypeQtiWiseLight) {
                         sensor.type = V2_1::SensorType::LIGHT;
                         sensor.typeAsString = SENSOR_STRING_TYPE_LIGHT;
-                        AlsCorrection::init();
                     }
                     bool keep = patchOplusPickupSensor(sensor) && patchOplusGlanceSensor(sensor);
                     if (!keep) {
