@@ -1,19 +1,26 @@
-cc_binary {
-    name: "android.hardware.ir-service.oplus",
+rust_defaults {
+    name: "android.hardware.ir-service.oplus-defaults",
     vendor: true,
+    srcs: ["main.rs"],
+    rustlibs: [
+        "android.hardware.ir-V1-rust",
+        "libbinder_rs",
+        "liblog_rust",
+        "liblogger",
+        "libnix",
+    ],
+}
+
+rust_binary {
+    name: "android.hardware.ir-service.oplus",
+    defaults: ["android.hardware.ir-service.oplus-defaults"],
     relative_install_path: "hw",
     init_rc: ["android.hardware.ir-service.oplus.rc"],
     vintf_fragments: ["android.hardware.ir-service.xml"],
-    srcs: [
-        "ConsumerIr.cpp",
-        "service.cpp",
-    ],
-    shared_libs: [
-        "android.hardware.ir-V1-ndk",
-        "libbase",
-        "libbinder_ndk",
-    ],
-    header_libs: [
-        "kernel_headers.oplus",
-    ],
+}
+
+rust_test {
+    name: "android.hardware.ir-service.oplus-test",
+    defaults: ["android.hardware.ir-service.oplus-defaults"],
+    test_suites: ["general-tests"],
 }
