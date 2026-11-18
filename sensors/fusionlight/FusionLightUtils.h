@@ -104,6 +104,21 @@ std::shared_ptr<Interface> GetService() {
     return binder.get() == nullptr ? nullptr : Interface::fromBinder(binder);
 }
 
+// For one-shot calls to services that may be lazy (oneshot and stopped after use).
+// checkService never starts those; getService does, waiting at most 5 s.
+template <typename Interface>
+std::shared_ptr<Interface> GetDeclaredService() {
+    const std::string instance = std::string(Interface::descriptor) + "/default";
+    if (!AServiceManager_isDeclared(instance.c_str())) {
+        return nullptr;
+    }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    ndk::SpAIBinder binder(AServiceManager_getService(instance.c_str()));
+#pragma clang diagnostic pop
+    return binder.get() == nullptr ? nullptr : Interface::fromBinder(binder);
+}
+
 }  // namespace fusionlight
 }  // namespace implementation
 }  // namespace subhal

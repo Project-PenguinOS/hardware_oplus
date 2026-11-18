@@ -680,7 +680,7 @@ struct MainPanelConfig {
 };
 
 std::optional<MainPanelConfig> GetMainPanelConfig() {
-    const auto service = GetService<IDisplayPanelFeature>();
+    const auto service = GetDeclaredService<IDisplayPanelFeature>();
     if (service == nullptr) {
         LOG(ERROR) << "IDisplayPanelFeature is unavailable";
         return std::nullopt;
@@ -807,7 +807,7 @@ std::optional<FusionConfig> LoadConfig(const std::string& sensor_name) {
 
 std::vector<Channels> LoadCalibration(const FusionConfig& config) {
     std::vector<Channels> calibration(config.leakage_golden.size(), Channels::Ones());
-    const auto service = GetService<ISensorFeature>();
+    const auto service = GetDeclaredService<ISensorFeature>();
     if (service == nullptr) {
         LOG(WARNING) << "ISensorFeature is unavailable; using unit FusionLight calibration";
         return calibration;
@@ -860,7 +860,7 @@ std::vector<Channels> LoadCalibration(const FusionConfig& config) {
 
 std::vector<ViewCalibration> LoadViewCalibration(const FusionConfig& config) {
     std::vector<ViewCalibration> calibration(config.segments.size(), ViewCalibration::Ones());
-    const auto service = GetService<ISensorFeature>();
+    const auto service = GetDeclaredService<ISensorFeature>();
     if (service == nullptr) {
         LOG(WARNING) << "ISensorFeature is unavailable; using unit FusionLight calibration";
         return calibration;
