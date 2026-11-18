@@ -1,0 +1,35 @@
+//
+// SPDX-FileCopyrightText: The LineageOS Project
+// SPDX-License-Identifier: Apache-2.0
+//
+
+rust_defaults {
+    name: "libfusionlight_rust-defaults",
+    crate_name: "fusionlight",
+    srcs: ["lib.rs"],
+    // jsoncpp reads numbers with strtod; arbitrary_precision makes serde_json round them
+    // the same way (the default fast path can be one ulp off and move IR band edges).
+    rustlibs: ["libserde_json_arbitrary_precision"],
+}
+
+rust_library {
+    name: "libfusionlight_rust",
+    defaults: ["libfusionlight_rust-defaults"],
+    host_supported: true,
+    vendor_available: true,
+}
+
+rust_test_host {
+    name: "libfusionlight_rust-test",
+    defaults: ["libfusionlight_rust-defaults"],
+}
+
+// Differential test tool, see compare_fusionlight.py.
+rust_binary_host {
+    name: "fusionlight_rust_vectors",
+    srcs: ["vectors.rs"],
+    rustlibs: [
+        "libfusionlight_rust",
+        "libserde_json_arbitrary_precision",
+    ],
+}
