@@ -8,6 +8,8 @@
 //! the HIDL side and receives events through `udfps_sensor_start`'s callback.
 
 use log::{error, info};
+
+mod tap;
 use std::ffi::c_void;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};

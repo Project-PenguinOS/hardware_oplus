@@ -23,7 +23,8 @@ using ::android::hardware::sensors::V2_1::SensorInfo;
 using ::android::hardware::sensors::V2_1::implementation::IHalProxyCallback;
 using ::android::hardware::sensors::V2_1::implementation::ISensorsSubHal;
 
-// The HIDL side of the UDFPS sensor; the sensor itself (udfps.rs) runs in Rust.
+// The HIDL side of the UDFPS and screen-off single tap sensors; the sensors themselves
+// (udfps.rs, tap.rs) run in Rust.
 class SensorsSubHal : public ISensorsSubHal {
   public:
     SensorsSubHal();
@@ -46,10 +47,15 @@ class SensorsSubHal : public ISensorsSubHal {
 
   private:
     static void onEvent(void* context, int32_t x, int32_t y);
+    static void onTap(void* context);
+    void postEvent(const SensorInfo& sensor, float x, float y);
 
     SensorInfo mSensorInfo;
+    SensorInfo mTapSensorInfo;
+    bool mTapAvailable = false;
     sp<IHalProxyCallback> mCallback;
     bool mStarted = false;
+    bool mTapStarted = false;
 };
 
 }  // namespace implementation
