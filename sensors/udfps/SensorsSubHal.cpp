@@ -12,6 +12,7 @@
 #include <utils/SystemClock.h>
 
 #include <cstdlib>
+#include <mutex>
 #include <string>
 
 using ::android::hardware::sensors::V2_1::implementation::ISensorsSubHal;
@@ -37,8 +38,12 @@ constexpr int kGestureEnableNode = 1;
 constexpr int kGestureIndepNode = 21;
 constexpr int kSingleTapGesture = 1 << 16;
 
+// activate() on a binder thread and onTap() on the sensor thread both read-modify-write node 21.
+std::mutex gGestureLock;
+
 // Arms the firmware single tap gesture while the sensor is active, keeping the other gestures.
 void setSingleTapGesture(bool enabled) {
+    std::lock_guard<std::mutex> lock(gGestureLock);
     const std::string instance = std::string() + IOplusTouch::descriptor + "/default";
     std::shared_ptr<IOplusTouch> touch = IOplusTouch::fromBinder(
             ndk::SpAIBinder(AServiceManager_checkService(instance.c_str())));
@@ -119,9 +124,14 @@ void SensorsSubHal::postEvent(const SensorInfo& sensor, float x, float y) {
 }
 
 void SensorsSubHal::onTap(void* context) {
+    auto* self = static_cast<SensorsSubHal*>(context);
+    // The sensor is one-shot and now off, and SensorService doesn't deactivate a fired
+    // one-shot. Disarm the firmware gesture here, or the panel keeps waking the phone for taps
+    // nobody listens to and holds double tap to wake off. Do it before the event goes out so
+    // the re-activation that event triggers can't race with it.
+    setSingleTapGesture(false);
     // No position: the firmware gesture only reports that a tap happened.
-    static_cast<SensorsSubHal*>(context)->postEvent(
-            static_cast<SensorsSubHal*>(context)->mTapSensorInfo, -1, -1);
+    self->postEvent(self->mTapSensorInfo, -1, -1);
 }
 
 void SensorsSubHal::onEvent(void* context, int32_t x, int32_t y) {
