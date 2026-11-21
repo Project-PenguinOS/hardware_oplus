@@ -1,6 +1,7 @@
 package android.view;
 
 import android.graphics.ColorSpace;
+import android.graphics.Rect;
 import android.hardware.DataSpace;
 import android.os.Process;
 import android.util.Log;
@@ -17,6 +18,23 @@ public class OplusWindowManager {
 
     public void requestKeyguard(String command) {}
     public boolean setPreferredDisplayMode(int mode) { return false; }
+
+    /**
+     * Window state observers (AONService gestures, Gallery). The ColorOS window manager that
+     * would call them back does not exist here, so they are accepted and never called.
+     */
+    public void registerOplusWindowStateObserver(IOplusWindowStateObserver observer) {}
+    public void unregisterOplusWindowStateObserver(IOplusWindowStateObserver observer) {}
+
+    /**
+     * Frame of the focused window, which ColorOS gets from WindowManagerService. An app
+     * process can't get it here, so the frame comes back empty.
+     */
+    public void getFocusedWindowFrame(Rect frame) {
+        if (frame != null) {
+            frame.setEmpty();
+        }
+    }
 
     /**
      * Capture a single SurfaceControl into a HardwareBuffer.
