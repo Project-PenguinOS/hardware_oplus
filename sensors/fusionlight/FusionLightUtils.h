@@ -13,6 +13,7 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -55,6 +56,14 @@ struct CwbConfig {
     std::vector<int32_t> weights;
 };
 
+struct ScreenshotMatchConfig {
+    std::chrono::nanoseconds delay{0};
+    std::chrono::nanoseconds delay_90{0};
+    std::optional<std::chrono::nanoseconds> delay_60;
+    std::chrono::nanoseconds sample_period_for_60{8333333};
+    double ratio_threshold = 0.6;
+};
+
 // Pre-V2.1 model for one FusionLightBrightnesses segment.
 struct ViewSegment {
     std::vector<ValueRange> ir_brightness;
@@ -79,6 +88,7 @@ struct FusionConfig {
     bool fod_linearity_segment_supported = false;
 
     CwbConfig cwb;
+    ScreenshotMatchConfig screenshot_match;
 
     std::vector<ValueRange> linearity_brightness;
     std::vector<ValueRange> ir_brightness;
@@ -101,7 +111,7 @@ struct FusionConfig {
 };
 
 std::optional<FusionConfig> LoadConfig(const std::string& sensor_name);
-std::vector<Channels> LoadCalibration(const FusionConfig& config);
+std::vector<Channels> LoadCalibration(const FusionConfig& config, bool stock_semantics);
 std::vector<ViewCalibration> LoadViewCalibration(const FusionConfig& config);
 
 template <typename Interface>

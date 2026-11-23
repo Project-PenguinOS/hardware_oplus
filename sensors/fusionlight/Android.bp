@@ -45,6 +45,9 @@ cc_library_shared {
     ] + select(soong_config_variable("oplus_sensors", "uses_als_capture"), {
         "true": ["-DUSES_ALS_CAPTURE"],
         default: [],
+    }) + select(soong_config_variable("oplus_sensors", "fusionlight_frame_sync"), {
+        "true": ["-DFUSIONLIGHT_FRAME_SYNC"],
+        default: [],
     }) + select(soong_config_variable("OPLUS_SENSORS_FUSIONLIGHT", "BACKEND_SUBHAL_LIB_NAME"), {
         any @ flag_val: ["-DBACKEND_SUBHAL_LIB_NAME=\"" + flag_val + "\""],
         default: [],

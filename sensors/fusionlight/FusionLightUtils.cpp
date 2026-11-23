@@ -5,7 +5,9 @@
 
 #include "FusionLightUtils.h"
 
+#include <array>
 #include <fstream>
+#include <sstream>
 
 #include <aidl/vendor/oplus/hardware/displaypanelfeature/IDisplayPanelFeature.h>
 #include <aidl/vendor/oplus/hardware/oplusSensor/ISensorFeature.h>
@@ -34,6 +36,7 @@ constexpr int32_t kPanelInfoFeature = 9;
 constexpr int32_t kMainPanelStageFeature = 0x22;
 constexpr int32_t kDefaultPanelStage = 4;
 constexpr auto kCwbWeightsPath = "/odm/etc/display/cwb_weightspos.json";
+constexpr auto kLeakCalibrationPath = "/mnt/vendor/persist/sensors/fusionlight_leak_cal.json";
 constexpr auto kDefaultScreenshotPeriod = 250ms;
 
 bool ReadNumber(const Json::Value& value, double& result) {
@@ -508,6 +511,29 @@ bool ParseConfig(std::istream& stream, FusionConfig& config, std::string& error)
     config.channel_count_policy_supported = common["ChannelCountPolicySupported"].asBool();
     config.fod_linearity_segment_supported = common["FODLinearityParasSegmentSupported"].asBool();
 
+    auto& match = config.screenshot_match;
+    std::chrono::nanoseconds delay_60{-1};
+    double threshold = match.ratio_threshold;
+    if ((common.isMember("SFScreenshotCalDelay") &&
+         !ReadRequiredDuration(common, "SFScreenshotCalDelay", match.delay)) ||
+        (common.isMember("SFScreenshotCalDelay90") &&
+         !ReadRequiredDuration(common, "SFScreenshotCalDelay90", match.delay_90)) ||
+        (common.isMember("SFScreenshotCalDelay60") &&
+         !ReadRequiredDuration(common, "SFScreenshotCalDelay60", delay_60)) ||
+        (common.isMember("SamplePeriodFor60") &&
+         !ReadRequiredDuration(common, "SamplePeriodFor60", match.sample_period_for_60)) ||
+        (common.isMember("SFScreenshotMatchRatioThreshold") &&
+         !ReadNumber(common["SFScreenshotMatchRatioThreshold"], threshold))) {
+        LOG(WARNING) << "Invalid FusionLight screenshot match parameters; using defaults";
+        match = ScreenshotMatchConfig();
+    } else {
+        // Stock treats -1 as "no 60 Hz delay".
+        if (delay_60 != std::chrono::nanoseconds(-1)) {
+            match.delay_60 = delay_60;
+        }
+        match.ratio_threshold = threshold;
+    }
+
     if (config.screenshot_v2_1_supported ? !ParseV21Model(root, config, error)
                                          : !ParseViewModel(root, config, error)) {
         return false;
@@ -805,56 +831,101 @@ std::optional<FusionConfig> LoadConfig(const std::string& sensor_name) {
     return config;
 }
 
-std::vector<Channels> LoadCalibration(const FusionConfig& config) {
-    std::vector<Channels> calibration(config.leakage_golden.size(), Channels::Ones());
+namespace {
+
+std::optional<Json::Value> ParseCalibrationJson(const std::string& text,
+                                                const std::string& source) {
+    Json::CharReaderBuilder builder;
+    builder["collectComments"] = false;
+    std::istringstream stream(text);
+    Json::Value root;
+    std::string error;
+    if (!Json::parseFromStream(builder, stream, &root, &error)) {
+        LOG(WARNING) << "Invalid FusionLight calibration from " << source << ": " << error;
+        return std::nullopt;
+    }
+    if (!root.isObject()) {
+        LOG(WARNING) << "FusionLight calibration from " << source << " is not an object";
+        return std::nullopt;
+    }
+    return root;
+}
+
+std::optional<Json::Value> LoadServiceCalibration() {
     const auto service = GetDeclaredService<ISensorFeature>();
     if (service == nullptr) {
-        LOG(WARNING) << "ISensorFeature is unavailable; using unit FusionLight calibration";
-        return calibration;
+        LOG(WARNING) << "ISensorFeature is unavailable";
+        return std::nullopt;
     }
-
     std::string response;
     const auto status = service->getSensorCalibrationData(kHighPwmSensorType, &response);
     if (!status.isOk()) {
         LOG(WARNING) << "ISensorFeature::getSensorCalibrationData failed: "
-                     << status.getDescription() << "; using profile golden values";
-        return calibration;
+                     << status.getDescription();
+        return std::nullopt;
     }
     LOG(INFO) << "ISensorFeature::getSensorCalibrationData returned " << response.size()
               << " bytes: " << response;
     if (response.empty() || response == "default") {
-        LOG(WARNING) << "No device FusionLight calibration; using profile golden values";
-        return calibration;
+        return std::nullopt;
     }
+    return ParseCalibrationJson(response, "ISensorFeature");
+}
 
-    Json::CharReaderBuilder builder;
-    builder["collectComments"] = false;
-    std::istringstream stream(response);
-    Json::Value root;
-    std::string error;
-    if (!Json::parseFromStream(builder, stream, &root, &error)) {
-        LOG(WARNING) << "Invalid device FusionLight calibration: " << error;
-        return calibration;
+std::optional<Json::Value> LoadFileCalibration() {
+    std::ifstream stream(kLeakCalibrationPath);
+    if (!stream) {
+        return std::nullopt;
     }
+    std::stringstream text;
+    text << stream.rdbuf();
+    return ParseCalibrationJson(text.str(), kLeakCalibrationPath);
+}
 
+}  // namespace
+
+std::vector<Channels> LoadCalibration(const FusionConfig& config, bool stock_semantics) {
+    std::vector<Channels> calibration(config.leakage_golden.size(),
+                                      stock_semantics ? Channels::Zero() : Channels::Ones());
+    const std::array<std::optional<Json::Value>, 2> sources = {
+            LoadServiceCalibration(),
+            stock_semantics ? LoadFileCalibration() : std::nullopt};
+    constexpr const char* kSourceNames[] = {"ISensorFeature", kLeakCalibrationPath};
     constexpr const char* kChannelNames[] = {"R", "G", "B", "C"};
-    int applied_values = 0;
+    std::array<int, 2> applied = {0, 0};
     for (int level = 0; level < calibration.size(); ++level) {
         for (int channel = 0; channel < kChannelCount; ++channel) {
             const std::string key =
                     "W_VIEW_" + std::string(kChannelNames[channel]) + "_" + std::to_string(level);
-            const Json::Value* value = FindMember(root, key);
             const double golden = config.leakage_golden[level][channel];
-            double measured;
-            if (value != nullptr && ReadNumber(*value, measured) && measured != 0.0 &&
-                golden != 0.0) {
-                calibration[level][channel] = measured / golden;
-                ++applied_values;
+            for (int source = 0; source < sources.size(); ++source) {
+                if (!sources[source].has_value()) {
+                    continue;
+                }
+                const Json::Value* value = FindMember(*sources[source], key);
+                double measured;
+                if (value == nullptr || !ReadNumber(*value, measured)) {
+                    continue;
+                }
+                if (stock_semantics ? measured > 0.0 && golden > 0.0
+                                    : measured != 0.0 && golden != 0.0) {
+                    calibration[level][channel] = measured / golden;
+                    ++applied[source];
+                    break;
+                }
             }
         }
     }
-    LOG(INFO) << "Applied " << applied_values << " of " << calibration.size() * kChannelCount
-              << " FusionLight calibration values";
+    const int total = calibration.size() * kChannelCount;
+    for (int source = 0; source < sources.size(); ++source) {
+        LOG(INFO) << "Applied " << applied[source] << " of " << total
+                  << " FusionLight leakage calibration values from " << kSourceNames[source];
+    }
+    if (stock_semantics && applied[0] + applied[1] < total) {
+        LOG(WARNING) << "Missing " << total - applied[0] - applied[1]
+                     << " FusionLight leakage calibration values; their leakage is not "
+                        "compensated, as on stock";
+    }
     return calibration;
 }
 

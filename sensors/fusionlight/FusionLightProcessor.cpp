@@ -13,6 +13,17 @@
 
 #include <android-base/logging.h>
 #include <android-base/properties.h>
+#include <android-base/stringprintf.h>
+#include <android-base/unique_fd.h>
+
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <cmath>
+#include <deque>
+#include <optional>
+#include <vector>
 
 namespace android {
 namespace hardware {
@@ -26,15 +37,31 @@ using namespace std::chrono_literals;
 
 namespace {
 
+#ifdef FUSIONLIGHT_FRAME_SYNC
+constexpr bool kFrameSync = true;
+#else
+constexpr bool kFrameSync = false;
+#endif
+
 constexpr size_t kMaxScreenSamples = 5;
 constexpr int64_t kSampleGracePeriods = 2;
 constexpr int64_t kCaptureStallPeriods = 8;
+
+constexpr size_t kMaxPendingEvents = 39;
+constexpr auto kMaxPendingAge = 2s;
+constexpr auto kNoMatchTimeout = 1s;
+constexpr auto kDefaultIntegrationWindow = 8333300ns;
+
+constexpr auto kScreenshotInfoPath = "/dev/ssc_screenshot_info";
+constexpr int32_t kScreenshotInfoTypeSurfaceFlinger = 1;
+constexpr int32_t kMaxScreenshotIndex = 65533;
 
 struct PendingEvent {
     Event event;
     Channels raw_channels = Channels::Zero();
     int32_t brightness = 0;
     bool dc_mode = false;
+    std::chrono::nanoseconds window = kDefaultIntegrationWindow;
 };
 
 int FindRange(const std::vector<ValueRange>& ranges, double value) {
@@ -333,6 +360,82 @@ Event MakeFusionLightEvent(const Event& event, int32_t fusion_light_handle, floa
     return result;
 }
 
+bool InRange(int64_t value, int64_t min, int64_t max) {
+    return value >= min && value <= max;
+}
+
+// Stock ScreenShotResult::matchRatio.
+double MatchRatio(const ScreenshotMatchConfig& config, const PendingEvent& pending,
+                  const CwbSample& sample) {
+    auto window = pending.window;
+    auto delay = config.delay;
+    const auto duration = sample.frame_end - sample.frame_start;
+    if (InRange(window.count(), 10000001, 11999999)) {
+        delay = config.delay_90;
+    } else if (InRange(window.count(), 15000001, 16999999)) {
+        if (config.delay_60.has_value() && InRange(duration.count(), 15000001, 16999999)) {
+            delay = *config.delay_60;
+            window = config.sample_period_for_60;
+        } else {
+            window = kDefaultIntegrationWindow;
+        }
+    }
+    if (window <= 0ns || duration <= 0ns) {
+        return 0.0;
+    }
+    const auto event_start = std::chrono::nanoseconds(pending.event.timestamp);
+    const auto overlap = std::min(event_start + window, sample.frame_end + delay) -
+                         std::max(event_start, sample.frame_start + delay);
+    return overlap <= 0ns ? 0.0
+                          : std::min(static_cast<double>(overlap.count()) / window.count(), 1.0);
+}
+
+int64_t ToFixedPoint4(double value) {
+    return static_cast<int64_t>(value * 1e4);
+}
+
+int64_t RoundFixedPoint4(double value) {
+    return static_cast<int64_t>(std::round(value * 1e4));
+}
+
+// Stock luxEventFilterLocked.
+bool AcceptLux(std::optional<double> last_lux, double lux,
+               const std::vector<const PendingEvent*>& candidates, size_t target) {
+    if (!last_lux.has_value()) {
+        return true;
+    }
+    const float previous = std::fabs(static_cast<float>(*last_lux)) < 0.001f
+                                   ? 1.0f
+                                   : static_cast<float>(*last_lux);
+    float limit;
+    const int64_t previous_fixed = ToFixedPoint4(previous);
+    if (InRange(previous_fixed, 10001, 340000 - 1)) {
+        limit = std::pow(previous - 0.9f, -0.128f) * 2.0385f;
+    } else {
+        limit = previous_fixed < 10001 ? 5.0f : 1.3f;
+    }
+    const int64_t rate = ToFixedPoint4(static_cast<float>(lux) / previous);
+    if (rate < ToFixedPoint4(limit) && rate > ToFixedPoint4(2.0f - limit)) {
+        return true;
+    }
+
+    if (candidates.size() < 2) {
+        return false;
+    }
+    const size_t last = target > 0 ? target - 1 : 0;
+    const size_t next = target + 1 < candidates.size() ? target + 1 : target;
+    const int64_t target_clear = RoundFixedPoint4(candidates[target]->raw_channels[3]);
+    const int64_t high = target_clear * 2;
+    const int64_t low = target_clear / 2;
+    for (const size_t index : {last, next}) {
+        const int64_t clear = RoundFixedPoint4(candidates[index]->raw_channels[3]);
+        if (clear > high || clear < low) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 struct FusionLightProcessor::SharedState {
@@ -348,14 +451,29 @@ struct FusionLightProcessor::SharedState {
 
     void enqueueDeliveryLocked(Event event) { delivery.push_back(std::move(event)); }
 
-    void finishWaitingLocked() {
-        if (!waiting_for_sample.has_value()) {
-            return;
-        }
-        if (cwb_failed) {
-            enqueueDeliveryLocked(std::move(waiting_for_sample->event));
-        }
+    void resetMatchingLocked() {
         waiting_for_sample.reset();
+        pending.clear();
+        match_sample.reset();
+        last_reported_lux.reset();
+        last_report_time = 0ns;
+    }
+
+    void flushPendingLocked() {
+        if (cwb_failed && !pending.empty()) {
+            enqueueDeliveryLocked(std::move(pending.back().event));
+        }
+        pending.clear();
+    }
+
+    void appendPendingLocked(PendingEvent pending_event) {
+        pending.push_back(std::move(pending_event));
+        const auto newest = std::chrono::nanoseconds(pending.back().event.timestamp);
+        while (pending.size() > kMaxPendingEvents ||
+               newest - std::chrono::nanoseconds(pending.front().event.timestamp) >
+                       kMaxPendingAge) {
+            pending.pop_front();
+        }
     }
 
     void checkCwbStallLocked(std::chrono::nanoseconds event_time) {
@@ -366,7 +484,11 @@ struct FusionLightProcessor::SharedState {
             LOG(WARNING) << "FusionLight CWB stalled since_ns=" << last_capture.count()
                          << " event_ns=" << event_time.count();
             cwb_failed = true;
-            finishWaitingLocked();
+            if (kFrameSync) {
+                flushPendingLocked();
+            } else {
+                finishWaitingLocked();
+            }
         }
     }
 
@@ -382,6 +504,16 @@ struct FusionLightProcessor::SharedState {
                          << " brightness=" << pending_event.brightness
                          << " reason=invalid_calibration lux=" << pending_event.event.u.scalar;
         }
+    }
+
+    void finishWaitingLocked() {
+        if (!waiting_for_sample.has_value()) {
+            return;
+        }
+        if (cwb_failed) {
+            enqueueDeliveryLocked(std::move(waiting_for_sample->event));
+        }
+        waiting_for_sample.reset();
     }
 
     bool updateCalibrationLocked(PendingEvent& pending_event) {
@@ -420,6 +552,141 @@ struct FusionLightProcessor::SharedState {
         finishWaitingLocked();
     }
 
+    void calibrateWithRecentSampleLocked(PendingEvent& pending_event) {
+        const auto event_time = std::chrono::nanoseconds(pending_event.event.timestamp);
+        const auto sample = SelectScreenSample(event_time, screen_samples);
+        if (sample.has_value() &&
+            event_time - sample->frame_end <= config.cwb.screenshot_period * kSampleGracePeriods) {
+            calibrateWithSampleLocked(pending_event, *sample);
+        }
+    }
+
+    void writeScreenshotInfoLocked(const CwbSample& sample) {
+        if (screenshot_info_failed || sample.frame_end <= sample.frame_start) {
+            return;
+        }
+        if (!screenshot_info_fd.ok()) {
+            screenshot_info_fd.reset(TEMP_FAILURE_RETRY(
+                    open(kScreenshotInfoPath, O_WRONLY | O_CLOEXEC)));
+            if (!screenshot_info_fd.ok()) {
+                PLOG(WARNING) << "Unable to open " << kScreenshotInfoPath;
+                screenshot_info_failed = true;
+                return;
+            }
+        }
+        screenshot_index = screenshot_index > kMaxScreenshotIndex ? 1 : screenshot_index + 1;
+        const auto info = android::base::StringPrintf(
+                "%lld,%lld,%d,%d", static_cast<long long>(sample.frame_start.count()),
+                static_cast<long long>(sample.frame_end.count()), screenshot_index,
+                kScreenshotInfoTypeSurfaceFlinger);
+        if (TEMP_FAILURE_RETRY(write(screenshot_info_fd.get(), info.c_str(), info.size())) < 0) {
+            PLOG(WARNING) << "Unable to write " << kScreenshotInfoPath;
+            screenshot_info_fd.reset();
+        }
+    }
+
+    // Stock handleEventForRegionSampling.
+    void tryMatchLocked(bool force_complete = false) {
+        if (!match_sample.has_value() || pending.empty()) {
+            return;
+        }
+        const CwbSample& sample = *match_sample;
+        const auto& match = config.screenshot_match;
+        const int64_t threshold = ToFixedPoint4(match.ratio_threshold);
+        std::vector<const PendingEvent*> candidates;
+        std::vector<int64_t> ratios;
+        const PendingEvent* best = nullptr;
+        double best_ratio = 0.0;
+        for (const auto& pending_event : pending) {
+            const double ratio = MatchRatio(match, pending_event, sample);
+            if (ToFixedPoint4(ratio) >= threshold) {
+                candidates.push_back(&pending_event);
+                ratios.push_back(ToFixedPoint4(ratio));
+            }
+            if (ratio > best_ratio) {
+                best = &pending_event;
+                best_ratio = ratio;
+            }
+        }
+
+        std::optional<size_t> peak;
+        for (size_t index = 0; index + 1 < candidates.size(); ++index) {
+            if (ratios[index + 1] < ratios[index]) {
+                peak = index;
+                break;
+            }
+        }
+        const auto latest_delay = std::max({match.delay, match.delay_90,
+                                            match.delay_60.value_or(match.delay)});
+        const bool complete = force_complete ||
+                              std::chrono::nanoseconds(pending.back().event.timestamp) >
+                                      sample.frame_end + latest_delay;
+        if (!peak.has_value() && !complete) {
+            return;
+        }
+        if (debug) {
+            std::string list;
+            for (const auto& pending_event : pending) {
+                list += android::base::StringPrintf(
+                        " %lld:%.2f", static_cast<long long>(pending_event.event.timestamp / 1000000),
+                        MatchRatio(match, pending_event, sample));
+            }
+            LOG(INFO) << "FusionLight capture ["
+                      << sample.frame_start.count() / 1000000 << ","
+                      << sample.frame_end.count() / 1000000 << "] candidates "
+                      << candidates.size() << (peak.has_value() ? " peak" : " complete")
+                      << " pending" << list;
+        }
+
+        size_t target = 0;
+        bool fallback = false;
+        if (!candidates.empty()) {
+            target = peak.value_or(candidates.size() - 1);
+        } else {
+            const auto newest = std::chrono::nanoseconds(pending.back().event.timestamp);
+            if (newest - last_report_time < kNoMatchTimeout) {
+                LOG_IF(INFO, debug) << "FusionLight no match, best ratio " << best_ratio;
+                match_sample.reset();
+                return;
+            }
+            if (best == nullptr) {
+                const auto capture_mid = (sample.frame_start + sample.frame_end) / 2 + match.delay;
+                auto distance = [&](const PendingEvent& event) {
+                    const auto mid = std::chrono::nanoseconds(event.event.timestamp) +
+                                     event.window / 2;
+                    return mid > capture_mid ? mid - capture_mid : capture_mid - mid;
+                };
+                for (const auto& pending_event : pending) {
+                    if (best == nullptr || distance(pending_event) < distance(*best)) {
+                        best = &pending_event;
+                    }
+                }
+            }
+            candidates.push_back(best);
+            fallback = true;
+        }
+
+        PendingEvent result = *candidates[target];
+        calibrateWithSampleLocked(result, sample);
+        match_sample.reset();
+        const double lux = result.event.u.scalar;
+        const int64_t target_time = result.event.timestamp;
+        if (fallback || AcceptLux(last_reported_lux, lux, candidates, target)) {
+            LOG_IF(INFO, debug) << "FusionLight report lux " << lux
+                                << (fallback ? " (fallback, best ratio " : " (ratio ")
+                                << (fallback ? best_ratio : ratios[target] / 1e4) << ")";
+            last_reported_lux = lux;
+            last_report_time = std::chrono::nanoseconds(target_time);
+            enqueueDeliveryLocked(std::move(result.event));
+        } else {
+            LOG_IF(INFO, debug) << "FusionLight filtered lux " << lux << " after "
+                                << *last_reported_lux;
+        }
+        while (!pending.empty() && pending.front().event.timestamp <= target_time) {
+            pending.pop_front();
+        }
+    }
+
     void dispatch() {
         for (;;) {
             Event event;
@@ -445,15 +712,23 @@ struct FusionLightProcessor::SharedState {
     FusionConfig config;
     std::vector<Channels> calibration;
     std::vector<ViewCalibration> view_calibration;
+    std::deque<PendingEvent> pending;
     std::optional<PendingEvent> waiting_for_sample;
     std::deque<Event> delivery;
     std::deque<CwbSample> screen_samples;
+    std::optional<CwbSample> match_sample;
+    std::optional<double> last_reported_lux;
+    std::chrono::nanoseconds last_report_time{0};
     std::chrono::nanoseconds minimum_frame_start{0};
+    android::base::unique_fd screenshot_info_fd;
+    int32_t screenshot_index = 0;
     int32_t brightness = -1;
     bool active = false;
     bool available = false;
     bool cwb_failed = false;
     bool dispatching = false;
+    bool screenshot_info_failed = false;
+    bool debug = false;
 };
 
 bool FusionLightProcessor::initialize(const std::string& sensor_name) {
@@ -484,7 +759,7 @@ bool FusionLightProcessor::initializeLocked() {
     if (!UsesScreenCapture(*config)) {
         LOG(INFO) << "FusionLight profile does not use screen captures";
     } else if (config->screenshot_v2_1_supported) {
-        calibration = LoadCalibration(*config);
+        calibration = LoadCalibration(*config, kFrameSync);
     } else {
         view_calibration = LoadViewCalibration(*config);
     }
@@ -502,6 +777,8 @@ bool FusionLightProcessor::initializeLocked() {
         state_->config = std::move(*config);
         state_->calibration = std::move(calibration);
         state_->view_calibration = std::move(view_calibration);
+        state_->debug =
+                android::base::GetBoolProperty("persist.vendor.sensors.fusionlight.debug", false);
         state_->available = true;
     }
     return true;
@@ -515,7 +792,7 @@ void FusionLightProcessor::setEnabled(bool enabled) {
             std::lock_guard lock(state_->mutex);
             state_->active = true;
             state_->screen_samples.clear();
-            state_->waiting_for_sample.reset();
+            state_->resetMatchingLocked();
             state_->delivery.clear();
             state_->minimum_frame_start = 0ns;
             state_->brightness = -1;
@@ -534,7 +811,7 @@ void FusionLightProcessor::setEnabled(bool enabled) {
     {
         std::lock_guard lock(state_->mutex);
         state_->screen_samples.clear();
-        state_->waiting_for_sample.reset();
+        state_->resetMatchingLocked();
         state_->delivery.clear();
         state_->minimum_frame_start = 0ns;
         state_->brightness = -1;
@@ -549,7 +826,9 @@ void FusionLightProcessor::enqueueReady(Event event) {
         if (!state_->active) {
             return;
         }
-        state_->finishWaitingLocked();
+        if (!kFrameSync) {
+            state_->finishWaitingLocked();
+        }
         state_->enqueueDeliveryLocked(std::move(event));
         should_dispatch = state_->startDispatchLocked();
     }
@@ -573,7 +852,7 @@ void FusionLightProcessor::processScreenOff(Event event, const Channels& raw_cha
             if (lux.has_value()) {
                 event.u.scalar = *lux;
             }
-            state_->waiting_for_sample.reset();
+            state_->resetMatchingLocked();
             state_->enqueueDeliveryLocked(std::move(event));
             should_dispatch = state_->startDispatchLocked();
             state_->screen_samples.clear();
@@ -606,6 +885,10 @@ void FusionLightProcessor::process(const Event& event, int32_t fusion_light_hand
     }
     // Bit 1 of the event flags reports DC dimming.
     const bool dc_mode = static_cast<int32_t>(event.u.data[2]) & 0x2;
+    const float window_ms = event.u.data[1];
+    const auto window = std::isfinite(window_ms) && window_ms > 0.0f
+                                ? std::chrono::nanoseconds(std::llround(window_ms * 1e6))
+                                : std::chrono::nanoseconds(kDefaultIntegrationWindow);
 
     bool available;
     bool screen_capture = false;
@@ -651,7 +934,9 @@ void FusionLightProcessor::process(const Event& event, int32_t fusion_light_hand
             }
             state_->checkCwbStallLocked(event_time);
             if (brightness_changed) {
-                state_->finishWaitingLocked();
+                if (!kFrameSync) {
+                    state_->finishWaitingLocked();
+                }
                 state_->brightness = brightness;
             }
         }
@@ -669,15 +954,23 @@ void FusionLightProcessor::process(const Event& event, int32_t fusion_light_hand
         if (!state_->active) {
             return;
         }
-        state_->finishWaitingLocked();
         PendingEvent pending_event{std::move(fusion_light_event), raw_channels, brightness,
-                                   dc_mode};
-        if (state_->updateCalibrationLocked(pending_event)) {
-            state_->enqueueDeliveryLocked(std::move(pending_event.event));
+                                   dc_mode, window};
+        if (!kFrameSync) {
+            state_->finishWaitingLocked();
+            if (state_->updateCalibrationLocked(pending_event)) {
+                state_->enqueueDeliveryLocked(std::move(pending_event.event));
+            } else if (state_->cwb_failed) {
+                state_->enqueueDeliveryLocked(std::move(pending_event.event));
+            } else {
+                state_->waiting_for_sample = std::move(pending_event);
+            }
         } else if (state_->cwb_failed) {
+            state_->calibrateWithRecentSampleLocked(pending_event);
             state_->enqueueDeliveryLocked(std::move(pending_event.event));
         } else {
-            state_->waiting_for_sample = std::move(pending_event);
+            state_->appendPendingLocked(std::move(pending_event));
+            state_->tryMatchLocked();
         }
         should_dispatch = state_->startDispatchLocked();
     }
@@ -690,7 +983,9 @@ void FusionLightProcessor::completeFlush(Event event) {
     bool should_dispatch = false;
     {
         std::lock_guard lock(state_->mutex);
-        state_->finishWaitingLocked();
+        if (!kFrameSync) {
+            state_->finishWaitingLocked();
+        }
         state_->enqueueDeliveryLocked(std::move(event));
         should_dispatch = state_->startDispatchLocked();
     }
@@ -717,14 +1012,25 @@ void FusionLightProcessor::handleSample(std::optional<CwbSample> sample) {
         if (!sample.has_value() || sample->frame_start <= 0ns ||
             sample->frame_end <= sample->frame_start) {
             shared_state->cwb_failed = true;
-            shared_state->finishWaitingLocked();
+            if (kFrameSync) {
+                shared_state->flushPendingLocked();
+            } else {
+                shared_state->finishWaitingLocked();
+            }
         } else if (sample->frame_start >= shared_state->minimum_frame_start) {
             shared_state->cwb_failed = false;
             shared_state->screen_samples.push_back(*sample);
             while (shared_state->screen_samples.size() > kMaxScreenSamples) {
                 shared_state->screen_samples.pop_front();
             }
-            shared_state->finishWaitingWithSampleLocked();
+            if (kFrameSync) {
+                shared_state->writeScreenshotInfoLocked(*sample);
+                shared_state->tryMatchLocked(/*force_complete=*/true);
+                shared_state->match_sample = *sample;
+                shared_state->tryMatchLocked();
+            } else {
+                shared_state->finishWaitingWithSampleLocked();
+            }
         }
         should_dispatch = shared_state->startDispatchLocked();
     }
