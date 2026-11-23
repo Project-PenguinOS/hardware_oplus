@@ -14,6 +14,7 @@
 #include <hardware/sensors.h>
 
 using ::android::hardware::sensors::V1_0::MetaDataEventType;
+using ::android::hardware::sensors::V1_0::SensorFlagBits;
 using ::android::hardware::sensors::V2_0::implementation::ScopedWakelock;
 using ::android::hardware::sensors::V2_1::implementation::ISensorsSubHal;
 
@@ -34,7 +35,19 @@ constexpr auto kLibName = "sensors.qsh.so";
 
 constexpr auto kTypeUnderScreenRgbSensor = static_cast<SensorType>(33171070);
 constexpr auto kTypeMainFusionConfigSensor = static_cast<SensorType>(33171042);
+constexpr auto kTypeRearLightSensor = static_cast<SensorType>(33171055);
 constexpr int32_t kVirtualSensorHandleBase = 0x10000;
+
+#ifdef STOCK_BRIGHTNESS_LUX
+constexpr bool kStockBrightnessLux = true;
+#else
+constexpr bool kStockBrightnessLux = false;
+#endif
+constexpr auto kStockLuxStringType = "org.penguin.sensor.auto_brightness_lux";
+constexpr auto kTypeStockLux = static_cast<SensorType>(
+        static_cast<int32_t>(SensorType::DEVICE_PRIVATE_BASE) + 0x4c58);
+constexpr int32_t kStockLuxHandleOffset = 0x20000;
+constexpr int64_t kInternalSamplingPeriodNs = 200000000;
 
 bool IsVirtualHandle(int32_t sensor_handle) {
     return sensor_handle >= kVirtualSensorHandleBase;
@@ -55,6 +68,10 @@ SensorsSubHal::SensorsSubHal()
                       }
                   }),
       fusion_light_([this](Event event) { emitFusionEvent(std::move(event)); }) {
+    if (kStockBrightnessLux) {
+        stock_lux_ = std::make_unique<StockLuxSensor>(
+                [this](int64_t timestamp_ns, float lux) { emitStockLux(timestamp_ns, lux); });
+    }
     if (!lib_handle_) {
         LOG(FATAL) << "dlopen " << kLibName << " failed: " << dlerror();
     }
@@ -79,44 +96,112 @@ Return<Result> SensorsSubHal::activate(int32_t sensor_handle, bool enabled) {
     const int32_t fusion_light_handle = fusion_light_handle_;
     const int32_t physical_handle = high_pwm_handle_;
     const bool fusion_light_request = sensor_handle == fusion_light_handle;
+    const bool stock_lux_request = stock_lux_handle_ >= 0 && sensor_handle == stock_lux_handle_;
+    SharedSensor* shared = sharedSensor(sensor_handle);
 
-    if (sensor_handle != physical_handle && !fusion_light_request) {
+    if (sensor_handle != physical_handle && !fusion_light_request && !stock_lux_request &&
+        shared == nullptr) {
         return impl_->activate(sensor_handle, enabled);
     }
 
-    {
-        std::lock_guard lock(control_mutex_);
+    std::lock_guard lock(control_mutex_);
 
-        const bool fusion_light_enabled = fusion_light_enabled_.load();
-        const bool currently_enabled = fusion_light_request ? fusion_light_enabled : raw_enabled_;
-        if (currently_enabled == enabled) {
+    if (shared != nullptr) {
+        if (shared->framework.load() == enabled) {
             return Result::OK;
         }
-
-        const bool was_physically_enabled = raw_enabled_ || fusion_light_enabled;
-        const bool should_be_physically_enabled =
-                fusion_light_request ? raw_enabled_ || enabled : enabled || fusion_light_enabled;
-        if (was_physically_enabled != should_be_physically_enabled) {
-            auto result = impl_->activate(physical_handle, should_be_physically_enabled);
+        if (!shared->internal) {
+            auto result = impl_->activate(sensor_handle, enabled);
             if (result != Result::OK) {
                 return result;
             }
         }
+        shared->framework.store(enabled);
+        return Result::OK;
+    }
 
-        if (fusion_light_request) {
-            fusion_light_enabled_.store(enabled);
-            fusion_light_.setEnabled(enabled);
-        } else {
-            raw_enabled_ = enabled;
+    bool raw = raw_enabled_;
+    bool fusion_light = fusion_light_enabled_.load();
+    bool stock_lux = stock_lux_enabled_.load();
+    bool& requested = fusion_light_request ? fusion_light : stock_lux_request ? stock_lux : raw;
+    if (requested == enabled) {
+        return Result::OK;
+    }
+    const bool was_physically_enabled = raw || fusion_light || stock_lux;
+    const bool was_processing = fusion_light || stock_lux;
+    requested = enabled;
+    const bool should_be_physically_enabled = raw || fusion_light || stock_lux;
+    const bool should_process = fusion_light || stock_lux;
+
+    if (stock_lux_request && enabled) {
+        setInternalLocked(proximity_, true);
+        setInternalLocked(rear_light_, true);
+    }
+    if (was_physically_enabled != should_be_physically_enabled) {
+        auto result = impl_->activate(physical_handle, should_be_physically_enabled);
+        if (result != Result::OK) {
+            if (stock_lux_request && enabled) {
+                setInternalLocked(proximity_, false);
+                setInternalLocked(rear_light_, false);
+            }
+            return result;
+        }
+    }
+
+    raw_enabled_ = raw;
+    fusion_light_enabled_.store(fusion_light);
+    stock_lux_enabled_.store(stock_lux);
+    if (was_processing != should_process) {
+        fusion_light_.setEnabled(should_process);
+    }
+    if (stock_lux_request) {
+        stock_lux_->setEnabled(enabled);
+        if (!enabled) {
+            setInternalLocked(proximity_, false);
+            setInternalLocked(rear_light_, false);
         }
     }
     return Result::OK;
 }
 
+SensorsSubHal::SharedSensor* SensorsSubHal::sharedSensor(int32_t sensor_handle) {
+    if (stock_lux_handle_ < 0 || sensor_handle < 0) {
+        return nullptr;
+    }
+    if (sensor_handle == proximity_.handle) {
+        return &proximity_;
+    }
+    if (sensor_handle == rear_light_.handle) {
+        return &rear_light_;
+    }
+    return nullptr;
+}
+
+void SensorsSubHal::setInternalLocked(SharedSensor& sensor, bool enabled) {
+    if (sensor.handle < 0 || sensor.internal == enabled) {
+        return;
+    }
+    if (!sensor.framework.load()) {
+        if (enabled) {
+            impl_->batch(sensor.handle, kInternalSamplingPeriodNs, 0);
+        }
+        const auto result = impl_->activate(sensor.handle, enabled);
+        if (result != Result::OK) {
+            LOG(WARNING) << "StockLux: activate(" << sensor.handle << ", " << enabled
+                         << ") failed: " << toString(result);
+            if (enabled) {
+                return;
+            }
+        }
+    }
+    sensor.internal = enabled;
+}
+
 Return<Result> SensorsSubHal::batch(int32_t sensor_handle, int64_t sampling_period_ns,
                                     int64_t max_report_latency_ns) {
-    const int32_t physical_handle =
-            sensor_handle == fusion_light_handle_ ? high_pwm_handle_ : sensor_handle;
+    const bool virtual_light = sensor_handle == fusion_light_handle_ ||
+                               (stock_lux_handle_ >= 0 && sensor_handle == stock_lux_handle_);
+    const int32_t physical_handle = virtual_light ? high_pwm_handle_ : sensor_handle;
     return impl_->batch(physical_handle, sampling_period_ns, max_report_latency_ns);
 }
 
@@ -124,6 +209,18 @@ Return<Result> SensorsSubHal::flush(int32_t sensor_handle) {
     const int32_t fusion_light_handle = fusion_light_handle_;
     const int32_t high_pwm_handle = high_pwm_handle_;
     const bool fusion_light_request = sensor_handle == fusion_light_handle;
+
+    if (stock_lux_handle_ >= 0 && sensor_handle == stock_lux_handle_) {
+        if (!stock_lux_enabled_.load()) {
+            return Result::BAD_VALUE;
+        }
+        Event event{};
+        event.sensorHandle = sensor_handle;
+        event.sensorType = SensorType::META_DATA;
+        event.u.meta.what = MetaDataEventType::META_DATA_FLUSH_COMPLETE;
+        hal_proxy_callback_->postEvents({event}, hal_proxy_callback_->createScopedWakelock(false));
+        return Result::OK;
+    }
 
     if (sensor_handle != high_pwm_handle && !fusion_light_request) {
         return impl_->flush(sensor_handle);
@@ -166,7 +263,8 @@ Return<Result> SensorsSubHal::unregisterDirectChannel(int32_t channel_handle) {
 Return<void> SensorsSubHal::configDirectReport(int32_t sensor_handle, int32_t channel_handle,
                                                RateLevel rate,
                                                ISensors::configDirectReport_cb callback) {
-    if (sensor_handle == fusion_light_handle_) {
+    if (sensor_handle == fusion_light_handle_ ||
+        (stock_lux_handle_ >= 0 && sensor_handle == stock_lux_handle_)) {
         callback(Result::BAD_VALUE, 0);
         return Void();
     }
@@ -184,7 +282,7 @@ Return<void> SensorsSubHal::getSensorsList_2_1(ISensors::getSensorsList_2_1_cb c
             return;
         }
 
-        auto sensors = hidl_vec<SensorInfo>(source.size() + 1);
+        auto sensors = hidl_vec<SensorInfo>(source.size() + (kStockBrightnessLux ? 2 : 1));
         std::copy(source.begin(), source.end(), sensors.begin());
         sensors[source.size()] = *high_pwm;
         const int32_t high_pwm_handle = high_pwm->sensorHandle;
@@ -193,6 +291,19 @@ Return<void> SensorsSubHal::getSensorsList_2_1(ISensors::getSensorsList_2_1_cb c
         sensors[source.size()].name = "Oplus FusionLight Sensor";
         sensors[source.size()].type = SensorType::LIGHT;
         sensors[source.size()].typeAsString = "";
+        const int32_t stock_lux_handle = high_pwm_handle + kStockLuxHandleOffset;
+        if (kStockBrightnessLux) {
+            auto& stock_lux = sensors[source.size() + 1];
+            stock_lux = *high_pwm;
+            stock_lux.sensorHandle = stock_lux_handle;
+            stock_lux.name = "Penguin Auto Brightness Lux";
+            stock_lux.type = kTypeStockLux;
+            stock_lux.typeAsString = kStockLuxStringType;
+            stock_lux.flags = static_cast<uint32_t>(SensorFlagBits::ON_CHANGE_MODE);
+            stock_lux.fifoReservedEventCount = 0;
+            stock_lux.fifoMaxEventCount = 0;
+            stock_lux.requiredPermission = "";
+        }
 
         bool initialize_fusion_light = false;
         if (high_pwm_handle_ < 0 && fusion_light_handle_ < 0) {
@@ -212,6 +323,24 @@ Return<void> SensorsSubHal::getSensorsList_2_1(ISensors::getSensorsList_2_1_cb c
             const auto profile_sensor =
                     main_profile_sensor == source.end() ? high_pwm : main_profile_sensor;
             fusion_light_.initialize(profile_sensor->name.c_str());
+            if (kStockBrightnessLux) {
+                stock_lux_handle_ = stock_lux_handle;
+                const SensorInfo* proximity = nullptr;
+                for (const auto& sensor : source) {
+                    if (sensor.type == SensorType::PROXIMITY &&
+                        (proximity == nullptr ||
+                         ((proximity->flags & SensorFlagBits::WAKE_UP) &&
+                          !(sensor.flags & SensorFlagBits::WAKE_UP)))) {
+                        proximity = &sensor;
+                    }
+                    if (sensor.type == kTypeRearLightSensor && rear_light_.handle < 0) {
+                        rear_light_.handle = sensor.sensorHandle;
+                    }
+                }
+                proximity_.handle = proximity != nullptr ? proximity->sensorHandle : -1;
+                LOG(INFO) << "Added stock lux sensor " << stock_lux_handle << ", proximity "
+                          << proximity_.handle << ", rear light " << rear_light_.handle;
+            }
             LOG(INFO) << "Added FusionLight sensor " << fusion_light_handle
                       << " backed by high-PWM RGB sensor " << high_pwm_handle;
         }
@@ -220,7 +349,8 @@ Return<void> SensorsSubHal::getSensorsList_2_1(ISensors::getSensorsList_2_1_cb c
 }
 
 Return<Result> SensorsSubHal::injectSensorData_2_1(const Event& event) {
-    if (event.sensorHandle == fusion_light_handle_) {
+    if (event.sensorHandle == fusion_light_handle_ ||
+        (stock_lux_handle_ >= 0 && event.sensorHandle == stock_lux_handle_)) {
         return Result::BAD_VALUE;
     }
     return impl_->injectSensorData_2_1(event);
@@ -283,13 +413,30 @@ void SensorsSubHal::postEvents(const std::vector<Event>& events, ScopedWakelock 
             continue;
         }
 
+        if (stock_lux_handle_ >= 0 && event.sensorType != SensorType::META_DATA) {
+            SharedSensor* shared = sharedSensor(event.sensorHandle);
+            if (shared != nullptr) {
+                if (stock_lux_enabled_.load()) {
+                    if (shared == &proximity_) {
+                        stock_lux_->onProximity(event.u.scalar);
+                    } else {
+                        stock_lux_->onAuxLux(event.u.scalar);
+                    }
+                }
+                if (!shared->framework.load()) {
+                    continue;
+                }
+            }
+        }
+
         // Forward every non-flush event unchanged.
         output.push_back(event);
         if (event.sensorType != kTypeUnderScreenRgbSensor) {
             continue;
         }
 
-        if (fusion_light_enabled_.load() && fusion_light_handle >= 0) {
+        if ((fusion_light_enabled_.load() || stock_lux_enabled_.load()) &&
+            fusion_light_handle >= 0) {
             fusion_light_.process(event, fusion_light_handle);
         }
     }
@@ -300,12 +447,27 @@ void SensorsSubHal::postEvents(const std::vector<Event>& events, ScopedWakelock 
 }
 
 void SensorsSubHal::emitFusionEvent(Event event) {
+    if (event.sensorType != SensorType::META_DATA && stock_lux_enabled_.load()) {
+        stock_lux_->onMainLux(event.u.scalar);
+    }
     if (!fusion_light_enabled_.load() || hal_proxy_callback_ == nullptr) {
         return;
     }
     std::vector<Event> events;
     events.push_back(std::move(event));
     hal_proxy_callback_->postEvents(events, hal_proxy_callback_->createScopedWakelock(false));
+}
+
+void SensorsSubHal::emitStockLux(int64_t timestamp_ns, float lux) {
+    if (!stock_lux_enabled_.load() || hal_proxy_callback_ == nullptr) {
+        return;
+    }
+    Event event{};
+    event.timestamp = timestamp_ns;
+    event.sensorHandle = stock_lux_handle_;
+    event.sensorType = kTypeStockLux;
+    event.u.scalar = lux;
+    hal_proxy_callback_->postEvents({event}, hal_proxy_callback_->createScopedWakelock(false));
 }
 
 ScopedWakelock SensorsSubHal::createScopedWakelock(bool lock) {

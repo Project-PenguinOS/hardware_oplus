@@ -10,6 +10,8 @@ cc_library_shared {
         "FusionLightUtils.cpp",
         "FusionLightProcessor.cpp",
         "SensorsSubHal.cpp",
+        "StockLuxPipeline.cpp",
+        "StockLuxSensor.cpp",
     ] + select(soong_config_variable("oplus_sensors", "uses_als_capture"), {
         "true": ["AlsSampler.cpp"],
         default: ["CwbSampler.cpp"],
@@ -48,9 +50,23 @@ cc_library_shared {
     }) + select(soong_config_variable("oplus_sensors", "fusionlight_frame_sync"), {
         "true": ["-DFUSIONLIGHT_FRAME_SYNC"],
         default: [],
+    }) + select(soong_config_variable("oplus_sensors", "stock_brightness_lux"), {
+        "true": ["-DSTOCK_BRIGHTNESS_LUX"],
+        default: [],
     }) + select(soong_config_variable("OPLUS_SENSORS_FUSIONLIGHT", "BACKEND_SUBHAL_LIB_NAME"), {
         any @ flag_val: ["-DBACKEND_SUBHAL_LIB_NAME=\"" + flag_val + "\""],
         default: [],
     }),
     vendor: true,
+}
+
+cc_test_host {
+    name: "sensors.fusionlight.stocklux_test",
+    srcs: [
+        "StockLuxPipeline.cpp",
+        "stocklux_test.cpp",
+    ],
+    test_options: {
+        unit_test: true,
+    },
 }

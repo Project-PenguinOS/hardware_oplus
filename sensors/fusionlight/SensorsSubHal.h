@@ -12,6 +12,7 @@
 #include <V2_1/SubHal.h>
 
 #include "FusionLightProcessor.h"
+#include "StockLuxSensor.h"
 
 namespace android {
 namespace hardware {
@@ -68,7 +69,16 @@ class SensorsSubHal : public ISensorsSubHal, public IHalProxyCallback {
         kFusionLight,
     };
 
+    struct SharedSensor {
+        int32_t handle = -1;
+        std::atomic_bool framework = false;
+        bool internal = false;
+    };
+
     void emitFusionEvent(Event event);
+    void emitStockLux(int64_t timestamp_ns, float lux);
+    SharedSensor* sharedSensor(int32_t sensor_handle);
+    void setInternalLocked(SharedSensor& sensor, bool enabled);
 
     std::unique_ptr<void, std::function<void(void*)>> lib_handle_;
     V2_1::implementation::ISensorsSubHal* impl_;
@@ -83,6 +93,12 @@ class SensorsSubHal : public ISensorsSubHal, public IHalProxyCallback {
     int32_t fusion_light_handle_ = -1;
     bool raw_enabled_ = false;
     std::atomic_bool fusion_light_enabled_ = false;
+
+    std::unique_ptr<StockLuxSensor> stock_lux_;
+    int32_t stock_lux_handle_ = -1;
+    std::atomic_bool stock_lux_enabled_ = false;
+    SharedSensor proximity_;
+    SharedSensor rear_light_;
 };
 
 }  // namespace fusionlight
