@@ -27,3 +27,5 @@ rw_dir_file(hal_sensors_default, vendor_sysfs_sensor_fb)
 # sensors.oplus arms the touch firmware single tap gesture for the doze tap sensor.
 hal_client_domain(hal_sensors_default, vendor_hal_oplus_touch)
 binder_call(hal_sensors_default, hal_oplus_touch_aidl)
+
+get_prop(hal_sensors_default, system_penguin_brightness_prop)

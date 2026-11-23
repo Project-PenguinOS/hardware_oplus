@@ -1,3 +1,5 @@
 # GameSpace (system_app) applies the touch firmware game mode through
 # vendor.oplus.hardware.touch.IOplusTouch while a game is in the foreground.
 hal_client_domain(system_app, vendor_hal_oplus_touch)
+
+set_prop(system_app, system_penguin_brightness_prop)
