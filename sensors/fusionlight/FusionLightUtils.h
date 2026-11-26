@@ -111,7 +111,7 @@ struct FusionConfig {
 };
 
 std::optional<FusionConfig> LoadConfig(const std::string& sensor_name);
-std::vector<Channels> LoadCalibration(const FusionConfig& config, bool stock_semantics);
+std::vector<Channels> LoadCalibration(const FusionConfig& config, bool read_persist);
 std::vector<ViewCalibration> LoadViewCalibration(const FusionConfig& config);
 
 template <typename Interface>

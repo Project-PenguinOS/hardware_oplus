@@ -884,47 +884,58 @@ std::optional<Json::Value> LoadFileCalibration() {
 
 }  // namespace
 
-std::vector<Channels> LoadCalibration(const FusionConfig& config, bool stock_semantics) {
-    std::vector<Channels> calibration(config.leakage_golden.size(),
-                                      stock_semantics ? Channels::Zero() : Channels::Ones());
+std::vector<Channels> LoadCalibration(const FusionConfig& config, bool read_persist) {
+    // Without factory data the golden leakage applies: measured on dodge it
+    // stays within 0.84-1.09 of the panel's real leakage at every level.
+    // Persist values far from golden come from a window that did not cover
+    // the sensor and would report most of the screen's own light as ambient.
+    constexpr double kMinGoldenRatio = 0.5;
+    constexpr double kMaxGoldenRatio = 2.0;
+    std::vector<Channels> calibration(config.leakage_golden.size(), Channels::Ones());
     const std::array<std::optional<Json::Value>, 2> sources = {
-            LoadServiceCalibration(),
-            stock_semantics ? LoadFileCalibration() : std::nullopt};
+            LoadServiceCalibration(), read_persist ? LoadFileCalibration() : std::nullopt};
     constexpr const char* kSourceNames[] = {"ISensorFeature", kLeakCalibrationPath};
     constexpr const char* kChannelNames[] = {"R", "G", "B", "C"};
     std::array<int, 2> applied = {0, 0};
+    std::array<int, 2> rejected = {0, 0};
     for (int level = 0; level < calibration.size(); ++level) {
         for (int channel = 0; channel < kChannelCount; ++channel) {
             const std::string key =
                     "W_VIEW_" + std::string(kChannelNames[channel]) + "_" + std::to_string(level);
             const double golden = config.leakage_golden[level][channel];
+            if (golden <= 0.0) {
+                continue;
+            }
             for (int source = 0; source < sources.size(); ++source) {
                 if (!sources[source].has_value()) {
                     continue;
                 }
                 const Json::Value* value = FindMember(*sources[source], key);
                 double measured;
-                if (value == nullptr || !ReadNumber(*value, measured)) {
+                if (value == nullptr || !ReadNumber(*value, measured) || measured <= 0.0) {
                     continue;
                 }
-                if (stock_semantics ? measured > 0.0 && golden > 0.0
-                                    : measured != 0.0 && golden != 0.0) {
-                    calibration[level][channel] = measured / golden;
-                    ++applied[source];
-                    break;
+                const double ratio = measured / golden;
+                if (source == 1 && (ratio < kMinGoldenRatio || ratio > kMaxGoldenRatio)) {
+                    ++rejected[source];
+                    continue;
                 }
+                calibration[level][channel] = ratio;
+                ++applied[source];
+                break;
             }
         }
     }
     const int total = calibration.size() * kChannelCount;
     for (int source = 0; source < sources.size(); ++source) {
         LOG(INFO) << "Applied " << applied[source] << " of " << total
-                  << " FusionLight leakage calibration values from " << kSourceNames[source];
+                  << " FusionLight leakage calibration values from " << kSourceNames[source]
+                  << ", rejected " << rejected[source] << " outside " << kMinGoldenRatio << "-"
+                  << kMaxGoldenRatio << "x golden";
     }
-    if (stock_semantics && applied[0] + applied[1] < total) {
-        LOG(WARNING) << "Missing " << total - applied[0] - applied[1]
-                     << " FusionLight leakage calibration values; their leakage is not "
-                        "compensated, as on stock";
+    if (applied[0] + applied[1] < total) {
+        LOG(INFO) << "Using golden leakage for " << total - applied[0] - applied[1]
+                  << " FusionLight calibration values";
     }
     return calibration;
 }
